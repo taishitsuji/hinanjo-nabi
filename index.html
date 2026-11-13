@@ -64,6 +64,20 @@
             padding: 12px 16px;
             display: none;
         }
+
+        /* トイレ用カスタムアイコン */
+        .toilet-pin {
+            background-color: #10b981;
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body class="text-white font-sans selection:bg-yellow-500 selection:text-black">
@@ -86,7 +100,7 @@
         <!-- 避難所検索バー -->
         <div id="search-box">
             <div class="relative">
-                <input type="text" id="search-input" placeholder="避難所名で検索（例：もみじ台、小学校）" 
+                <input type="text" id="search-input" placeholder="避難所・トイレ名で検索" 
                     class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
                 <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
             </div>
@@ -131,13 +145,15 @@
         let map;
         let allShelters = [];
         let markerLayer;
-        let routeLayer = null;   // 道路に沿ったルート線
-        let directLine = null;   // 直線の補助・圏外用線
+        let routeLayer = null;
+        let directLine = null;
         let targetShelter = null;
         let lastRouteFetchTime = 0;
+        let lastRenderedCenter = null; // 前回ピンを描画した中心座標
+        let openedPopupKey = null;     // 現在開いている吹き出しの識別キー
 
-        let currentLat = 43.03806;
-        let currentLng = 141.48471;
+        let currentLat = 35.49895; // 初期値（市原市付近）
+        let currentLng = 140.05860;
         let currentHeading = 0;
         let targetHeading = 0;
         let isTracking = true;
@@ -161,9 +177,9 @@
         const searchResults = document.getElementById('search-results');
         const clearSearchBtn = document.getElementById('clear-search-btn');
 
-        // グローバル関数として定義（ポップアップ内のボタンから確実に呼び出すため）
         window.startNavigationTo = function(name, lat, lng) {
             setTargetShelter(name, lat, lng);
+            openedPopupKey = null;
             if (map) map.closePopup();
         };
 
@@ -204,12 +220,20 @@
 
             markerLayer = L.layerGroup().addTo(map);
 
+            // 吹き出しが手動で閉じられたら記憶を消す
+            map.on('popupclose', () => {
+                // 再描画中の一時的なクローズでない場合のみリセット
+                if (!window.isRedrawingMarkers) {
+                    openedPopupKey = null;
+                }
+            });
+
             shelterCount.innerText = 'データ読込中...';
             fetch('./shelters.json')
                 .then(res => res.json())
                 .then(data => {
                     allShelters = data;
-                    updateVisibleShelters(currentLat, currentLng);
+                    updateVisibleShelters(currentLat, currentLng, true);
                 })
                 .catch(err => {
                     shelterCount.innerText = 'データ読込失敗';
@@ -222,15 +246,29 @@
 
             map.on('moveend', () => {
                 const center = map.getCenter();
-                updateVisibleShelters(center.lat, center.lng);
+                // 1km以上移動したときだけピンを再描画する（小さな揺れで吹き出しが消えるのを防止）
+                if (!lastRenderedCenter || center.distanceTo(lastRenderedCenter) > 1000) {
+                    updateVisibleShelters(center.lat, center.lng, false);
+                }
             });
         }
 
-        // 3. 周辺の避難所描画
-        function updateVisibleShelters(centerLat, centerLng) {
+        // トイレ用アイコン定義
+        const toiletIcon = L.divIcon({
+            className: 'toilet-pin',
+            html: 'WC',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+        });
+
+        // 3. 周辺の避難所・トイレ描画
+        function updateVisibleShelters(centerLat, centerLng, force) {
             if (!allShelters || allShelters.length === 0) return;
             
+            lastRenderedCenter = L.latLng(centerLat, centerLng);
+            window.isRedrawingMarkers = true;
             markerLayer.clearLayers();
+            
             let count = 0;
             const range = 0.15;
 
@@ -240,10 +278,12 @@
                 const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
 
                 if (!isNaN(sLat) && !isNaN(sLon) && Math.abs(sLat - centerLat) < range && Math.abs(sLon - centerLng) < range) {
+                    const key = `${s.name}_${sLat}_${sLon}`;
                     const safeName = s.name.replace(/'/g, "\\'");
                     const badges = [];
                     if (s.isEmg) badges.push('<span class="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5 rounded">緊急避難</span>');
-                    if (s.isShl) badges.push('<span class="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded">避難所</span>');
+                    if (s.isShl) badges.push('<span class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded">避難所</span>');
+                    if (s.hasTo) badges.push('<span class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded">トイレ</span>');
 
                     const html = `
                         <div class="text-center p-1 min-w-[140px]">
@@ -256,12 +296,27 @@
                         </div>
                     `;
 
-                    L.marker([sLat, sLon])
+                    // トイレ専用データ（避難所フラグがなくトイレフラグがあるもの）は緑色のWCピンにする
+                    const isToiletOnly = (s.hasTo === 1 && !s.isEmg && !s.isShl);
+                    const markerOptions = isToiletOnly ? { icon: toiletIcon } : {};
+
+                    const marker = L.marker([sLat, sLon], markerOptions)
                      .addTo(markerLayer)
-                     .bindPopup(html);
+                     .bindPopup(html, { autoClose: true, closeOnClick: false });
+
+                    marker.on('click', () => {
+                        openedPopupKey = key;
+                    });
+
+                    // 再描画前に開いていた吹き出しがあれば即座に開き直す
+                    if (openedPopupKey === key) {
+                        marker.openPopup();
+                    }
+
                     count++;
                 }
             }
+            window.isRedrawingMarkers = false;
             shelterCount.innerText = `表示中: ${count}件 / 全${allShelters.length}件`;
         }
 
@@ -279,7 +334,7 @@
             searchResults.innerHTML = '';
 
             if (matches.length === 0) {
-                searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する避難所が見つかりません</div>';
+                searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する施設が見つかりません</div>';
             } else {
                 matches.forEach(s => {
                     const sLat = Number(s.lat);
@@ -315,8 +370,8 @@
             isTracking = true;
             resumeBtn.style.display = 'none';
             map.setView([currentLat, currentLng], 16);
-            updateVisibleShelters(currentLat, currentLng);
-            lastRouteFetchTime = 0; // 即座にルート検索を実行させる
+            updateVisibleShelters(currentLat, currentLng, true);
+            lastRouteFetchTime = 0;
             updateNavigationRoute();
         }
 
@@ -333,7 +388,6 @@
             }
         });
 
-        // 道路に沿ったルート検索（OSRM API）＋ オフライン時は直線フォールバック
         async function updateNavigationRoute() {
             if (!targetShelter) return;
 
@@ -341,7 +395,6 @@
             const to = L.latLng(targetShelter.lat, targetShelter.lng);
             const directDist = Math.round(from.distanceTo(to));
 
-            // まず直線の補助線を更新（オフラインでも常に方角がわかるようにする）
             if (directLine) {
                 directLine.setLatLngs([from, to]);
             } else {
@@ -353,7 +406,6 @@
                 }).addTo(map);
             }
 
-            // 通信負荷を防ぐため、ルート再検索は10秒に1回まで制限
             const now = Date.now();
             if (now - lastRouteFetchTime < 10000 && routeLayer) {
                 return;
@@ -361,7 +413,6 @@
             lastRouteFetchTime = now;
 
             try {
-                // OSRMの徒歩ルート検索APIを呼び出し
                 const url = `https://router.project-osrm.org/route/v1/foot/${currentLng},${currentLat};${targetShelter.lng},${targetShelter.lat}?overview=full&geometries=geojson`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('Route API Error');
@@ -370,7 +421,7 @@
                 if (data.routes && data.routes.length > 0) {
                     const route = data.routes[0];
                     const routeDist = Math.round(route.distance);
-                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lon, lat] を [lat, lon] に変換
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
 
                     routeModeLabel.innerText = '道路ルート案内中（青線）';
                     routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
@@ -382,7 +433,7 @@
                         routeLayer.setLatLngs(coords);
                     } else {
                         routeLayer = L.polyline(coords, {
-                            color: '#06b6d4', // 視認性の高いシアンブルー
+                            color: '#06b6d4',
                             weight: 7,
                             opacity: 0.9
                         }).addTo(map);
@@ -391,7 +442,6 @@
                     throw new Error('No route found');
                 }
             } catch (err) {
-                // オフライン（圏外）や通信エラー時は直線レーダーモードに自動切替
                 if (routeLayer) {
                     map.removeLayer(routeLayer);
                     routeLayer = null;
