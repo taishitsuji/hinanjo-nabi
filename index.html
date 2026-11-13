@@ -14,7 +14,6 @@
     <style>
         body { overflow: hidden; touch-action: none; background-color: #0f172a; margin: 0; }
         
-        /* 地図コンテナのスタイル */
         #map-wrapper {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             overflow: hidden; z-index: 10; display: none;
@@ -26,15 +25,13 @@
         }
         #map { width: 100%; height: 100%; background: #1e293b; }
 
-        /* UIオーバーレイ */
         #ui-overlay {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50;
-            background: linear-gradient(to top, rgba(15,23,42,1) 60%, rgba(15,23,42,0));
+            background: linear-gradient(to top, rgba(15,23,42,1) 70%, rgba(15,23,42,0));
             padding: 40px 20px 20px 20px;
             display: none;
         }
 
-        /* 中央のナビゲーションアイコン（自分の向き） */
         #center-marker {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%); z-index: 40;
@@ -42,9 +39,18 @@
             display: none;
         }
 
-        /* フリールックから現在地に戻るボタン */
         #resume-btn {
             position: absolute; top: 20px; right: 20px; z-index: 60;
+            display: none;
+        }
+
+        /* 目的地ナビゲーションパネル */
+        #nav-panel {
+            position: absolute; top: 20px; left: 20px; right: 20px; z-index: 55;
+            background: rgba(15, 23, 42, 0.9);
+            border: 2px solid #eab308;
+            border-radius: 12px;
+            padding: 12px 16px;
             display: none;
         }
     </style>
@@ -66,6 +72,18 @@
             <div id="map"></div>
         </div>
         
+        <!-- 目的地ナビパネル -->
+        <div id="nav-panel" class="flex justify-between items-center shadow-lg">
+            <div>
+                <div class="text-xs text-yellow-400 font-bold">目的地へ誘導中</div>
+                <div id="target-name" class="text-base font-bold truncate max-w-[200px]">-</div>
+                <div id="target-dist" class="text-xl font-extrabold text-white mt-0.5">残り --- m</div>
+            </div>
+            <button id="cancel-nav-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded-lg">
+                案内終了
+            </button>
+        </div>
+
         <!-- 中央のポインター -->
         <div id="center-marker">
             <div class="w-6 h-6 bg-blue-500 border-4 border-white rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] mx-auto mt-2 relative">
@@ -92,7 +110,10 @@
         let map;
         let allShelters = [];
         let markerLayer;
-        let currentLat = 43.03806; // 初期値（札幌付近）
+        let guideLine = null;
+        let targetShelter = null;
+
+        let currentLat = 43.03806;
         let currentLng = 141.48471;
         let currentHeading = 0;
         let targetHeading = 0;
@@ -107,6 +128,10 @@
         const statusText = document.getElementById('status-text');
         const shelterCount = document.getElementById('shelter-count');
         const mapContainer = document.getElementById('map-container');
+        const navPanel = document.getElementById('nav-panel');
+        const targetNameEl = document.getElementById('target-name');
+        const targetDistEl = document.getElementById('target-dist');
+        const cancelNavBtn = document.getElementById('cancel-nav-btn');
 
         // 1. スタートボタン押下時
         startBtn.addEventListener('click', async () => {
@@ -114,11 +139,11 @@
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
                     if (permission !== 'granted') {
-                        alert('コンパスの利用が許可されませんでした。iPhoneの設定からSafariのセンサーへのアクセスを許可してください。');
+                        alert('コンパスの利用が許可されませんでした。');
                         return; 
                     }
                 } catch (error) {
-                    console.error('許可リクエストエラー:', error);
+                    console.error(error);
                 }
             }
 
@@ -144,7 +169,6 @@
 
             markerLayer = L.layerGroup().addTo(map);
 
-            // 避難所データの読み込み
             shelterCount.innerText = 'データ読込中...';
             fetch('./shelters.json')
                 .then(res => res.json())
@@ -153,48 +177,103 @@
                     updateVisibleShelters(currentLat, currentLng);
                 })
                 .catch(err => {
-                    console.error('避難所データエラー:', err);
                     shelterCount.innerText = 'データ読込失敗';
                 });
 
-            // 指で地図を動かしたとき
             map.on('dragstart', () => {
                 isTracking = false;
                 resumeBtn.style.display = 'block';
             });
 
-            // 地図の移動が終わったら周辺の避難所を再描画
             map.on('moveend', () => {
                 const center = map.getCenter();
                 updateVisibleShelters(center.lat, center.lng);
             });
         }
 
-        // 周辺の避難所だけを描画（スマホのフリーズ防止）
+        // 3. 周辺の避難所描画とポップアップ設定
         function updateVisibleShelters(centerLat, centerLng) {
             if (!allShelters || allShelters.length === 0) return;
             
             markerLayer.clearLayers();
             let count = 0;
-            // 緯度経度で約0.05度（約5km四方）の範囲だけピンを立てる
-            const range = 0.05; 
+            const range = 0.05;
 
             for (let i = 0; i < allShelters.length; i++) {
                 const s = allShelters[i];
                 const sLat = s.lat;
-                const sLon = s.lon !== undefined ? s.lon : s.lng; // lon と lng 両対応
+                const sLon = s.lon !== undefined ? s.lon : s.lng;
 
                 if (sLat && sLon && Math.abs(sLat - centerLat) < range && Math.abs(sLon - centerLng) < range) {
+                    const popupContent = document.createElement('div');
+                    popupContent.className = 'text-center p-1';
+                    popupContent.innerHTML = `
+                        <div class="font-bold text-gray-900 text-sm mb-2">${s.name}</div>
+                        <button class="nav-go-btn bg-blue-600 text-white text-xs font-bold py-1.5 px-3 rounded shadow">
+                            ここへナビ開始
+                        </button>
+                    `;
+                    
+                    popupContent.querySelector('.nav-go-btn').addEventListener('click', () => {
+                        setTargetShelter(s.name, sLat, sLon);
+                        map.closePopup();
+                    });
+
                     L.marker([sLat, sLon])
                      .addTo(markerLayer)
-                     .bindPopup(`<b>${s.name}</b>`);
+                     .bindPopup(popupContent);
                     count++;
                 }
             }
             shelterCount.innerText = `周辺避難所: ${count}件`;
         }
 
-        // 3. センサー類の開始
+        // 4. 目的地セット＆誘導ライン描画
+        function setTargetShelter(name, lat, lng) {
+            targetShelter = { name, lat, lng };
+            targetNameEl.innerText = name;
+            navPanel.style.display = 'flex';
+            isTracking = true;
+            resumeBtn.style.display = 'none';
+            map.setView([currentLat, currentLng], map.getZoom());
+            updateNavigationLine();
+        }
+
+        // 案内終了ボタン
+        cancelNavBtn.addEventListener('click', () => {
+            targetShelter = null;
+            navPanel.style.display = 'none';
+            if (guideLine) {
+                map.removeLayer(guideLine);
+                guideLine = null;
+            }
+        });
+
+        // 誘導ラインと距離の更新
+        function updateNavigationLine() {
+            if (!targetShelter) return;
+
+            const from = L.latLng(currentLat, currentLng);
+            const to = L.latLng(targetShelter.lat, targetShelter.lng);
+            const distance = Math.round(from.distanceTo(to)); // メートル単位の直線距離
+
+            targetDistEl.innerText = distance >= 1000 
+                ? `残り ${(distance / 1000).toFixed(2)} km` 
+                : `残り ${distance} m`;
+
+            if (guideLine) {
+                guideLine.setLatLngs([from, to]);
+            } else {
+                guideLine = L.polyline([from, to], {
+                    color: '#ef4444', // 目立つ赤色
+                    weight: 5,
+                    opacity: 0.8,
+                    dashArray: '10, 10' // 点線
+                }).addTo(map);
+            }
+        }
+
+        // 5. センサー類の開始
         function startSensors() {
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(
@@ -206,6 +285,7 @@
                         if (isTracking) {
                             map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
                         }
+                        updateNavigationLine();
                     },
                     error => {
                         statusText.innerText = 'GPSエラー: ' + error.message;
@@ -230,7 +310,7 @@
             updateRotation();
         }
 
-        // 4. 地図の回転アニメーション
+        // 6. 地図の回転アニメーション
         function updateRotation() {
             let diff = targetHeading - currentHeading;
             if (diff > 180) diff -= 360;
@@ -247,7 +327,7 @@
             requestAnimationFrame(updateRotation);
         }
 
-        // 5. GPS追従モードへの復帰
+        // 7. GPS追従モードへの復帰
         resumeBtn.addEventListener('click', () => {
             isTracking = true;
             resumeBtn.style.display = 'none';
