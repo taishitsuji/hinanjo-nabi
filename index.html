@@ -220,7 +220,6 @@
                 attributionControl: false
             }).setView([currentLat, currentLng], 15);
 
-            // URLをサブドメインなしに統一（保存したキャッシュが100%一致するようにするため）
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 17,
                 keepBuffer: 6,
@@ -259,7 +258,7 @@
             });
         }
 
-        // 周辺地図（ズーム13〜16の約5km四方）を一括ダウンロードして保存する機能
+        // 周辺地図を一括ダウンロードして保存する機能
         downloadMapBtn.addEventListener('click', async () => {
             if (!navigator.onLine) {
                 alert('オフライン（機内モード）中は地図をダウンロードできません。ネットに接続した状態で押してください。');
@@ -270,12 +269,11 @@
             const cLat = center.lat;
             const cLng = center.lng;
 
-            // 保存するズームレベルと範囲（約5〜6km四方の広域〜詳細）
             const zoomConfigs = [
-                { z: 13, radius: 1 }, // 3x3 = 9枚（広域）
-                { z: 14, radius: 1 }, // 3x3 = 9枚（中域）
-                { z: 15, radius: 2 }, // 5x5 = 25枚（標準）
-                { z: 16, radius: 4 }  // 9x9 = 81枚（詳細）
+                { z: 13, radius: 1 },
+                { z: 14, radius: 1 },
+                { z: 15, radius: 2 },
+                { z: 16, radius: 4 }
             ];
 
             const urls = [];
@@ -307,7 +305,6 @@
                             await cache.put(url, res);
                             saved++;
                         }
-                        // サーバー負荷軽減のため0.1秒待機
                         await new Promise(r => setTimeout(r, 100));
                     } else {
                         saved++;
@@ -528,6 +525,20 @@
             }
         }
 
+        // 方位センサーの受信処理（0度＝真北の誤判定防止＆360度正規化）
+        function handleOrientation(event) {
+            let heading = null;
+            if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
+                heading = event.webkitCompassHeading;
+            } else if (event.alpha !== null) {
+                heading = (360 - event.alpha) % 360;
+            }
+
+            if (heading !== null && !isNaN(heading)) {
+                targetHeading = ((heading % 360) + 360) % 360;
+            }
+        }
+
         // 5. センサー類の開始
         function startSensors() {
             if (navigator.geolocation) {
@@ -549,29 +560,23 @@
                 );
             }
 
-            window.addEventListener('deviceorientation', event => {
-                let heading = null;
-                if (event.webkitCompassHeading) {
-                    heading = event.webkitCompassHeading;
-                } else if (event.alpha !== null) {
-                    heading = Math.abs(event.alpha - 360);
-                }
-
-                if (heading !== null) {
-                    targetHeading = heading;
-                }
-            });
+            if ('ondeviceorientationabsolute' in window) {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
 
             updateRotation();
         }
 
-        // 6. 地図の回転アニメーション
+        // 6. 地図の回転アニメーション（0〜360度正規化でフリーズ防止）
         function updateRotation() {
             let diff = targetHeading - currentHeading;
             if (diff > 180) diff -= 360;
             if (diff < -180) diff += 360;
             
-            currentHeading += diff * 0.1;
+            currentHeading += diff * 0.15;
+            currentHeading = ((currentHeading % 360) + 360) % 360;
             
             if (isTracking) {
                 mapContainer.style.transform = `rotate(-${currentHeading}deg)`;
