@@ -27,8 +27,8 @@
 
         #ui-overlay {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50;
-            background: linear-gradient(to top, rgba(15,23,42,1) 70%, rgba(15,23,42,0));
-            padding: 40px 20px 20px 20px;
+            background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0));
+            padding: 35px 16px 16px 16px;
             display: none;
         }
 
@@ -40,7 +40,7 @@
         }
 
         #resume-btn {
-            position: absolute; bottom: 80px; right: 20px; z-index: 60;
+            position: absolute; bottom: 85px; right: 16px; z-index: 60;
             display: none;
         }
 
@@ -100,7 +100,7 @@
         <!-- 避難所検索バー -->
         <div id="search-box">
             <div class="relative">
-                <input type="text" id="search-input" placeholder="避難所・トイレ名で検索" 
+                <input type="text" id="search-input" placeholder="避難所で検索" 
                     class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
                 <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
             </div>
@@ -126,15 +126,20 @@
             </div>
         </div>
         
-        <button id="resume-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-full shadow-lg active:scale-95 transition">
+        <button id="resume-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-full text-sm shadow-lg active:scale-95 transition">
             GPSに追従する
         </button>
     </div>
 
-    <!-- 下部のステータス表示 -->
-    <div id="ui-overlay" class="flex justify-between items-end text-sm">
+    <!-- 下部のステータス＆地図保存バー -->
+    <div id="ui-overlay" class="flex flex-col gap-2 text-xs">
+        <div class="flex justify-between items-center">
+            <button id="download-map-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2 px-3.5 rounded-lg shadow flex items-center gap-1.5 transition">
+                <span>周辺地図を保存（圏外用）</span>
+            </button>
+            <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
+        </div>
         <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
-        <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
     </div>
 
     <script>
@@ -149,8 +154,8 @@
         let directLine = null;
         let targetShelter = null;
         let lastRouteFetchTime = 0;
-        let lastRenderedCenter = null; // 前回ピンを描画した中心座標
-        let openedPopupKey = null;     // 現在開いている吹き出しの識別キー
+        let lastRenderedCenter = null;
+        let openedPopupKey = null;
 
         let currentLat = 35.49895; // 初期値（市原市付近）
         let currentLng = 140.05860;
@@ -176,11 +181,12 @@
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
         const clearSearchBtn = document.getElementById('clear-search-btn');
+        const downloadMapBtn = document.getElementById('download-map-btn');
 
         window.startNavigationTo = function(name, lat, lng) {
-            setTargetShelter(name, lat, lng);
             openedPopupKey = null;
             if (map) map.closePopup();
+            setTargetShelter(name, lat, lng);
         };
 
         // 1. スタートボタン押下時
@@ -214,15 +220,16 @@
                 attributionControl: false
             }).setView([currentLat, currentLng], 15);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19
+            // URLをサブドメインなしに統一（保存したキャッシュが100%一致するようにするため）
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 17,
+                keepBuffer: 6,
+                updateWhenZooming: false
             }).addTo(map);
 
             markerLayer = L.layerGroup().addTo(map);
 
-            // 吹き出しが手動で閉じられたら記憶を消す
             map.on('popupclose', () => {
-                // 再描画中の一時的なクローズでない場合のみリセット
                 if (!window.isRedrawingMarkers) {
                     openedPopupKey = null;
                 }
@@ -246,12 +253,78 @@
 
             map.on('moveend', () => {
                 const center = map.getCenter();
-                // 1km以上移動したときだけピンを再描画する（小さな揺れで吹き出しが消えるのを防止）
                 if (!lastRenderedCenter || center.distanceTo(lastRenderedCenter) > 1000) {
                     updateVisibleShelters(center.lat, center.lng, false);
                 }
             });
         }
+
+        // 周辺地図（ズーム13〜16の約5km四方）を一括ダウンロードして保存する機能
+        downloadMapBtn.addEventListener('click', async () => {
+            if (!navigator.onLine) {
+                alert('オフライン（機内モード）中は地図をダウンロードできません。ネットに接続した状態で押してください。');
+                return;
+            }
+
+            const center = map.getCenter();
+            const cLat = center.lat;
+            const cLng = center.lng;
+
+            // 保存するズームレベルと範囲（約5〜6km四方の広域〜詳細）
+            const zoomConfigs = [
+                { z: 13, radius: 1 }, // 3x3 = 9枚（広域）
+                { z: 14, radius: 1 }, // 3x3 = 9枚（中域）
+                { z: 15, radius: 2 }, // 5x5 = 25枚（標準）
+                { z: 16, radius: 4 }  // 9x9 = 81枚（詳細）
+            ];
+
+            const urls = [];
+            for (const cfg of zoomConfigs) {
+                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z));
+                const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
+                
+                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) {
+                    for (let dy = -cfg.radius; dy <= cfg.radius; dy++) {
+                        urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`);
+                    }
+                }
+            }
+
+            downloadMapBtn.disabled = true;
+            downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
+            
+            const cache = await caches.open('hinanjo-navi-tiles-v3');
+            let saved = 0;
+
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
+                try {
+                    const existing = await cache.match(url);
+                    if (!existing) {
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            await cache.put(url, res);
+                            saved++;
+                        }
+                        // サーバー負荷軽減のため0.1秒待機
+                        await new Promise(r => setTimeout(r, 100));
+                    } else {
+                        saved++;
+                    }
+                } catch (e) {
+                    console.warn('タイル取得スキップ:', url);
+                }
+            }
+
+            downloadMapBtn.innerText = `保存完了！(${saved}枚)`;
+            downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
+            setTimeout(() => {
+                downloadMapBtn.innerText = '周辺地図を保存（圏外用）';
+                downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
+                downloadMapBtn.disabled = false;
+            }, 4000);
+        });
 
         // トイレ用アイコン定義
         const toiletIcon = L.divIcon({
@@ -296,7 +369,6 @@
                         </div>
                     `;
 
-                    // トイレ専用データ（避難所フラグがなくトイレフラグがあるもの）は緑色のWCピンにする
                     const isToiletOnly = (s.hasTo === 1 && !s.isEmg && !s.isShl);
                     const markerOptions = isToiletOnly ? { icon: toiletIcon } : {};
 
@@ -308,7 +380,6 @@
                         openedPopupKey = key;
                     });
 
-                    // 再描画前に開いていた吹き出しがあれば即座に開き直す
                     if (openedPopupKey === key) {
                         marker.openPopup();
                     }
@@ -369,7 +440,10 @@
             navPanel.style.display = 'flex';
             isTracking = true;
             resumeBtn.style.display = 'none';
-            map.setView([currentLat, currentLng], 16);
+            
+            map.invalidateSize({ animate: false });
+            map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+            
             updateVisibleShelters(currentLat, currentLng, true);
             lastRouteFetchTime = 0;
             updateNavigationRoute();
@@ -512,7 +586,8 @@
         resumeBtn.addEventListener('click', () => {
             isTracking = true;
             resumeBtn.style.display = 'none';
-            map.setView([currentLat, currentLng], map.getZoom());
+            map.invalidateSize({ animate: false });
+            map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
         });
     </script>
 </body>
