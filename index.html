@@ -40,14 +40,25 @@
         }
 
         #resume-btn {
-            position: absolute; top: 20px; right: 20px; z-index: 60;
+            position: absolute; bottom: 80px; right: 20px; z-index: 60;
             display: none;
+        }
+
+        /* 検索ボックス */
+        #search-box {
+            position: absolute; top: 16px; left: 16px; right: 16px; z-index: 65;
+            display: none;
+        }
+        #search-results {
+            max-height: 220px;
+            overflow-y: auto;
+            touch-action: pan-y;
         }
 
         /* 目的地ナビゲーションパネル */
         #nav-panel {
-            position: absolute; top: 20px; left: 20px; right: 20px; z-index: 55;
-            background: rgba(15, 23, 42, 0.9);
+            position: absolute; top: 72px; left: 16px; right: 16px; z-index: 55;
+            background: rgba(15, 23, 42, 0.94);
             border: 2px solid #eab308;
             border-radius: 12px;
             padding: 12px 16px;
@@ -60,7 +71,7 @@
     <!-- スタート画面 -->
     <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-50 p-6 text-center">
         <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
-        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。<br>圏外でもレーダーとして機能します。</p>
+        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。<br>オンライン時は道路ルート、圏外時は直線レーダーで誘導します。</p>
         <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">
             ナビゲーション開始
         </button>
@@ -71,15 +82,25 @@
         <div id="map-container">
             <div id="map"></div>
         </div>
+
+        <!-- 避難所検索バー -->
+        <div id="search-box">
+            <div class="relative">
+                <input type="text" id="search-input" placeholder="避難所名で検索（例：もみじ台、小学校）" 
+                    class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
+                <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
+            </div>
+            <div id="search-results" class="hidden bg-gray-900/95 border border-gray-700 rounded-lg mt-1 shadow-xl divide-y divide-gray-800"></div>
+        </div>
         
         <!-- 目的地ナビパネル -->
         <div id="nav-panel" class="flex justify-between items-center shadow-lg">
             <div>
-                <div class="text-xs text-yellow-400 font-bold">目的地へ誘導中</div>
-                <div id="target-name" class="text-base font-bold truncate max-w-[200px]">-</div>
+                <div id="route-mode-label" class="text-xs text-yellow-400 font-bold">ルート検索中...</div>
+                <div id="target-name" class="text-base font-bold truncate max-w-[210px]">-</div>
                 <div id="target-dist" class="text-xl font-extrabold text-white mt-0.5">残り --- m</div>
             </div>
-            <button id="cancel-nav-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded-lg">
+            <button id="cancel-nav-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2.5 px-3.5 rounded-lg shrink-0">
                 案内終了
             </button>
         </div>
@@ -99,7 +120,7 @@
     <!-- 下部のステータス表示 -->
     <div id="ui-overlay" class="flex justify-between items-end text-sm">
         <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
-        <div id="shelter-count" class="text-yellow-400 font-bold"></div>
+        <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
     </div>
 
     <script>
@@ -110,8 +131,10 @@
         let map;
         let allShelters = [];
         let markerLayer;
-        let guideLine = null;
+        let routeLayer = null;   // 道路に沿ったルート線
+        let directLine = null;   // 直線の補助・圏外用線
         let targetShelter = null;
+        let lastRouteFetchTime = 0;
 
         let currentLat = 43.03806;
         let currentLng = 141.48471;
@@ -129,9 +152,20 @@
         const shelterCount = document.getElementById('shelter-count');
         const mapContainer = document.getElementById('map-container');
         const navPanel = document.getElementById('nav-panel');
+        const routeModeLabel = document.getElementById('route-mode-label');
         const targetNameEl = document.getElementById('target-name');
         const targetDistEl = document.getElementById('target-dist');
         const cancelNavBtn = document.getElementById('cancel-nav-btn');
+        const searchBox = document.getElementById('search-box');
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+
+        // グローバル関数として定義（ポップアップ内のボタンから確実に呼び出すため）
+        window.startNavigationTo = function(name, lat, lng) {
+            setTargetShelter(name, lat, lng);
+            if (map) map.closePopup();
+        };
 
         // 1. スタートボタン押下時
         startBtn.addEventListener('click', async () => {
@@ -151,6 +185,7 @@
             mapWrapper.style.display = 'block';
             centerMarker.style.display = 'block';
             uiOverlay.style.display = 'flex';
+            searchBox.style.display = 'block';
 
             initMap();
             startSensors();
@@ -191,85 +226,181 @@
             });
         }
 
-        // 3. 周辺の避難所描画とポップアップ設定
+        // 3. 周辺の避難所描画
         function updateVisibleShelters(centerLat, centerLng) {
             if (!allShelters || allShelters.length === 0) return;
             
             markerLayer.clearLayers();
             let count = 0;
-            const range = 0.05;
+            const range = 0.15;
 
             for (let i = 0; i < allShelters.length; i++) {
                 const s = allShelters[i];
-                const sLat = s.lat;
-                const sLon = s.lon !== undefined ? s.lon : s.lng;
+                const sLat = Number(s.lat);
+                const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
 
-                if (sLat && sLon && Math.abs(sLat - centerLat) < range && Math.abs(sLon - centerLng) < range) {
-                    const popupContent = document.createElement('div');
-                    popupContent.className = 'text-center p-1';
-                    popupContent.innerHTML = `
-                        <div class="font-bold text-gray-900 text-sm mb-2">${s.name}</div>
-                        <button class="nav-go-btn bg-blue-600 text-white text-xs font-bold py-1.5 px-3 rounded shadow">
-                            ここへナビ開始
-                        </button>
+                if (!isNaN(sLat) && !isNaN(sLon) && Math.abs(sLat - centerLat) < range && Math.abs(sLon - centerLng) < range) {
+                    const safeName = s.name.replace(/'/g, "\\'");
+                    const badges = [];
+                    if (s.isEmg) badges.push('<span class="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5 rounded">緊急避難</span>');
+                    if (s.isShl) badges.push('<span class="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded">避難所</span>');
+
+                    const html = `
+                        <div class="text-center p-1 min-w-[140px]">
+                            <div class="font-bold text-gray-900 text-sm mb-1">${s.name}</div>
+                            <div class="flex justify-center gap-1 mb-2">${badges.join('')}</div>
+                            <button onclick="window.startNavigationTo('${safeName}', ${sLat}, ${sLon})" 
+                                class="w-full bg-blue-600 active:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded shadow">
+                                ここへ経路案内
+                            </button>
+                        </div>
                     `;
-                    
-                    popupContent.querySelector('.nav-go-btn').addEventListener('click', () => {
-                        setTargetShelter(s.name, sLat, sLon);
-                        map.closePopup();
-                    });
 
                     L.marker([sLat, sLon])
                      .addTo(markerLayer)
-                     .bindPopup(popupContent);
+                     .bindPopup(html);
                     count++;
                 }
             }
-            shelterCount.innerText = `周辺避難所: ${count}件`;
+            shelterCount.innerText = `表示中: ${count}件 / 全${allShelters.length}件`;
         }
 
-        // 4. 目的地セット＆誘導ライン描画
+        // 検索機能
+        searchInput.addEventListener('input', (e) => {
+            const keyword = e.target.value.trim();
+            if (!keyword) {
+                searchResults.classList.add('hidden');
+                clearSearchBtn.classList.add('hidden');
+                return;
+            }
+            clearSearchBtn.classList.remove('hidden');
+
+            const matches = allShelters.filter(s => s.name && s.name.includes(keyword)).slice(0, 30);
+            searchResults.innerHTML = '';
+
+            if (matches.length === 0) {
+                searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する避難所が見つかりません</div>';
+            } else {
+                matches.forEach(s => {
+                    const sLat = Number(s.lat);
+                    const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
+                    const item = document.createElement('div');
+                    item.className = 'p-3 text-sm hover:bg-gray-800 cursor-pointer flex justify-between items-center';
+                    item.innerHTML = `
+                        <span class="font-bold text-white truncate pr-2">${s.name}</span>
+                        <span class="text-xs bg-yellow-500 text-black font-bold px-2.5 py-1 rounded shrink-0">経路案内</span>
+                    `;
+                    item.addEventListener('click', () => {
+                        setTargetShelter(s.name, sLat, sLon);
+                        searchResults.classList.add('hidden');
+                        searchInput.value = s.name;
+                    });
+                    searchResults.appendChild(item);
+                });
+            }
+            searchResults.classList.remove('hidden');
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            searchResults.classList.add('hidden');
+            clearSearchBtn.classList.add('hidden');
+        });
+
+        // 4. 目的地セット＆経路描画
         function setTargetShelter(name, lat, lng) {
             targetShelter = { name, lat, lng };
             targetNameEl.innerText = name;
             navPanel.style.display = 'flex';
             isTracking = true;
             resumeBtn.style.display = 'none';
-            map.setView([currentLat, currentLng], map.getZoom());
-            updateNavigationLine();
+            map.setView([currentLat, currentLng], 16);
+            updateVisibleShelters(currentLat, currentLng);
+            lastRouteFetchTime = 0; // 即座にルート検索を実行させる
+            updateNavigationRoute();
         }
 
-        // 案内終了ボタン
         cancelNavBtn.addEventListener('click', () => {
             targetShelter = null;
             navPanel.style.display = 'none';
-            if (guideLine) {
-                map.removeLayer(guideLine);
-                guideLine = null;
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            if (directLine) {
+                map.removeLayer(directLine);
+                directLine = null;
             }
         });
 
-        // 誘導ラインと距離の更新
-        function updateNavigationLine() {
+        // 道路に沿ったルート検索（OSRM API）＋ オフライン時は直線フォールバック
+        async function updateNavigationRoute() {
             if (!targetShelter) return;
 
             const from = L.latLng(currentLat, currentLng);
             const to = L.latLng(targetShelter.lat, targetShelter.lng);
-            const distance = Math.round(from.distanceTo(to)); // メートル単位の直線距離
+            const directDist = Math.round(from.distanceTo(to));
 
-            targetDistEl.innerText = distance >= 1000 
-                ? `残り ${(distance / 1000).toFixed(2)} km` 
-                : `残り ${distance} m`;
-
-            if (guideLine) {
-                guideLine.setLatLngs([from, to]);
+            // まず直線の補助線を更新（オフラインでも常に方角がわかるようにする）
+            if (directLine) {
+                directLine.setLatLngs([from, to]);
             } else {
-                guideLine = L.polyline([from, to], {
-                    color: '#ef4444', // 目立つ赤色
-                    weight: 5,
-                    opacity: 0.8,
-                    dashArray: '10, 10' // 点線
+                directLine = L.polyline([from, to], {
+                    color: '#ef4444',
+                    weight: 3,
+                    opacity: 0.6,
+                    dashArray: '8, 8'
                 }).addTo(map);
+            }
+
+            // 通信負荷を防ぐため、ルート再検索は10秒に1回まで制限
+            const now = Date.now();
+            if (now - lastRouteFetchTime < 10000 && routeLayer) {
+                return;
+            }
+            lastRouteFetchTime = now;
+
+            try {
+                // OSRMの徒歩ルート検索APIを呼び出し
+                const url = `https://router.project-osrm.org/route/v1/foot/${currentLng},${currentLat};${targetShelter.lng},${targetShelter.lat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Route API Error');
+                const data = await res.json();
+
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const routeDist = Math.round(route.distance);
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lon, lat] を [lat, lon] に変換
+
+                    routeModeLabel.innerText = '道路ルート案内中（青線）';
+                    routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
+                    targetDistEl.innerText = routeDist >= 1000 
+                        ? `道なり ${(routeDist / 1000).toFixed(2)} km` 
+                        : `道なり ${routeDist} m`;
+
+                    if (routeLayer) {
+                        routeLayer.setLatLngs(coords);
+                    } else {
+                        routeLayer = L.polyline(coords, {
+                            color: '#06b6d4', // 視認性の高いシアンブルー
+                            weight: 7,
+                            opacity: 0.9
+                        }).addTo(map);
+                    }
+                } else {
+                    throw new Error('No route found');
+                }
+            } catch (err) {
+                // オフライン（圏外）や通信エラー時は直線レーダーモードに自動切替
+                if (routeLayer) {
+                    map.removeLayer(routeLayer);
+                    routeLayer = null;
+                }
+                routeModeLabel.innerText = '圏外レーダー誘導（赤点線）';
+                routeModeLabel.className = 'text-xs text-yellow-400 font-bold';
+                targetDistEl.innerText = directDist >= 1000 
+                    ? `直線 ${(directDist / 1000).toFixed(2)} km` 
+                    : `直線 ${directDist} m`;
             }
         }
 
@@ -285,7 +416,7 @@
                         if (isTracking) {
                             map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
                         }
-                        updateNavigationLine();
+                        updateNavigationRoute();
                     },
                     error => {
                         statusText.innerText = 'GPSエラー: ' + error.message;
