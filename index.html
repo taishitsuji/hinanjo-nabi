@@ -178,7 +178,20 @@
             hazardLayer = L.tileLayer('https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png', { opacity: 0.7, maxNativeZoom: 15, maxZoom: 17 });
 
             shelterCount.innerText = 'データ読込中...';
-            fetch('./shelters.json').then(res => res.json()).then(data => { allShelters = data; renderAllShelters(); });
+            
+            // ★変更点：2つのファイルを同時に読み込んで結合する処理★
+            Promise.all([
+                fetch('./shelters.json').then(res => res.json()).catch(() => []), // エラー時は空配列
+                fetch('./toilets_japan_full.json').then(res => res.json()).catch(() => []) // エラー時は空配列
+            ]).then(([sheltersData, toiletsData]) => {
+                allShelters = sheltersData.concat(toiletsData);
+                renderAllShelters();
+            }).catch(err => {
+                console.error("データ読み込みエラー:", err);
+                shelterCount.innerText = '読込エラー';
+            });
+            // ★変更点ここまで★
+
             map.on('dragstart', () => { isTracking = false; resumeBtn.style.display = 'block'; });
         }
 
