@@ -8,16 +8,28 @@
     <link rel="apple-touch-icon" href="icon.png">
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet & MarkerCluster CSS/JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <style>
         body { overflow: hidden; touch-action: none; background-color: #0f172a; margin: 0; }
         
-        #map-wrapper {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            overflow: hidden; z-index: 10; display: none;
+        /* コンテンツ領域（タブで切り替え） */
+        .tab-content {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 65px; /* 下部タブバーの分あける */
+            display: none; overflow: hidden;
         }
+        .tab-content.active { display: block; }
+        
+        /* マニュアルのスクロール領域 */
+        #manual-content { overflow-y: auto; touch-action: pan-y; background-color: #1e293b; padding: 20px; }
+
+        /* 地図領域 */
         #map-container {
             position: absolute; top: -50vh; left: -50vw;
             width: 200vw; height: 200vh;
@@ -25,35 +37,29 @@
         }
         #map { width: 100%; height: 100%; background: #1e293b; }
 
+        /* UIオーバーレイ (マップ上) */
         #ui-overlay {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50;
             background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0));
-            padding: 35px 16px 16px 16px;
-            display: none;
+            padding: 20px 16px 16px 16px;
         }
 
         #center-marker {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%); z-index: 40;
             width: 40px; height: 40px; pointer-events: none;
-            display: none;
         }
 
         #resume-btn {
-            position: absolute; bottom: 85px; right: 16px; z-index: 60;
+            position: absolute; bottom: 70px; right: 16px; z-index: 60;
             display: none;
         }
 
         /* 検索ボックス */
         #search-box {
             position: absolute; top: 16px; left: 16px; right: 16px; z-index: 65;
-            display: none;
         }
-        #search-results {
-            max-height: 220px;
-            overflow-y: auto;
-            touch-action: pan-y;
-        }
+        #search-results { max-height: 220px; overflow-y: auto; touch-action: pan-y; }
 
         /* 目的地ナビゲーションパネル */
         #nav-panel {
@@ -64,50 +70,68 @@
             padding: 12px 16px;
             display: none;
         }
+        
+        /* ハザードマップトグルボタン */
+        #hazard-btn {
+            position: absolute; top: 75px; right: 16px; z-index: 60;
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #ef4444;
+            color: white; font-weight: bold; font-size: 12px;
+            padding: 8px 12px; border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #hazard-btn.active { background: #ef4444; color: white; }
 
-        /* トイレ用カスタムアイコン */
+        /* カスタムアイコン */
         .toilet-pin {
-            background-color: #10b981;
-            border: 2px solid white;
-            border-radius: 50%;
-            color: white;
-            font-weight: bold;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background-color: #10b981; border: 2px solid white; border-radius: 50%;
+            color: white; font-weight: bold; font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
         }
+
+        /* 下部タブバー */
+        #bottom-tab-bar {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 65px;
+            background-color: #0f172a; border-top: 1px solid #334155;
+            display: flex; z-index: 100;
+        }
+        .tab-btn {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #64748b; font-size: 11px; font-weight: bold; padding: 5px;
+        }
+        .tab-btn.active { color: #eab308; }
+        .tab-icon { font-size: 20px; margin-bottom: 2px; }
     </style>
 </head>
 <body class="text-white font-sans selection:bg-yellow-500 selection:text-black">
 
     <!-- スタート画面 -->
-    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-50 p-6 text-center">
+    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] p-6 text-center">
         <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
-        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。<br>オンライン時は道路ルート、圏外時は直線レーダーで誘導します。</p>
+        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。</p>
         <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">
             ナビゲーション開始
         </button>
     </div>
 
-    <!-- マップ画面 -->
-    <div id="map-wrapper">
+    <!-- コンテンツ: マップ -->
+    <div id="tab-map" class="tab-content">
         <div id="map-container">
             <div id="map"></div>
         </div>
 
-        <!-- 避難所検索バー -->
+        <button id="hazard-btn">⚠️ 浸水ハザード (オフ)</button>
+
         <div id="search-box">
             <div class="relative">
-                <input type="text" id="search-input" placeholder="避難所で検索" 
+                <input type="text" id="search-input" placeholder="避難所・トイレ名で検索" 
                     class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
                 <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
             </div>
             <div id="search-results" class="hidden bg-gray-900/95 border border-gray-700 rounded-lg mt-1 shadow-xl divide-y divide-gray-800"></div>
         </div>
         
-        <!-- 目的地ナビパネル -->
         <div id="nav-panel" class="flex justify-between items-center shadow-lg">
             <div>
                 <div id="route-mode-label" class="text-xs text-yellow-400 font-bold">ルート検索中...</div>
@@ -119,7 +143,6 @@
             </button>
         </div>
 
-        <!-- 中央のポインター -->
         <div id="center-marker">
             <div class="w-6 h-6 bg-blue-500 border-4 border-white rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] mx-auto mt-2 relative">
                 <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-500"></div>
@@ -129,35 +152,104 @@
         <button id="resume-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-full text-sm shadow-lg active:scale-95 transition">
             GPSに追従する
         </button>
+
+        <div id="ui-overlay" class="flex flex-col gap-2 text-xs">
+            <div class="flex justify-between items-center">
+                <button id="download-map-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2 px-3.5 rounded-lg shadow flex items-center gap-1.5 transition">
+                    <span>周辺地図を保存（圏外用）</span>
+                </button>
+                <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
+            </div>
+            <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
+        </div>
     </div>
 
-    <!-- 下部のステータス＆地図保存バー -->
-    <div id="ui-overlay" class="flex flex-col gap-2 text-xs">
-        <div class="flex justify-between items-center">
-            <button id="download-map-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2 px-3.5 rounded-lg shadow flex items-center gap-1.5 transition">
-                <span>周辺地図を保存（圏外用）</span>
-            </button>
-            <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
+    <!-- コンテンツ: マニュアル -->
+    <div id="tab-manual" class="tab-content" style="height: calc(100vh - 65px);">
+        <div id="manual-content" class="h-full w-full max-w-2xl mx-auto">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-6 border-b border-gray-600 pb-2">📖 オフライン防災マニュアル</h2>
+            
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">🩸 応急手当・止血</h3>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <p class="text-sm text-gray-300 mb-2"><strong>直接圧迫止血法：</strong> 最も確実な方法です。</p>
+                    <ul class="list-disc pl-5 text-sm text-gray-300 space-y-1">
+                        <li>清潔なガーゼやハンカチを傷口に直接当てる</li>
+                        <li>その上から手で強く圧迫する（体重をかける）</li>
+                        <li>血が止まるまで数分間、離さずに圧迫し続ける</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">🚽 簡易トイレの作り方</h3>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <p class="text-sm text-gray-300 mb-2">断水時、自宅のトイレを使う方法です。</p>
+                    <ol class="list-decimal pl-5 text-sm text-gray-300 space-y-1">
+                        <li>便座を上げ、便器にポリ袋（ゴミ袋）を1枚かぶせる（水濡れ防止）</li>
+                        <li>便座を下ろし、もう1枚ポリ袋をかぶせる</li>
+                        <li>袋の中にちぎった新聞紙やペットシートを敷き詰める</li>
+                        <li>使用後は上の袋だけを取り出し、しっかり結んで捨てる</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">🆘 SOSのサイン（ヘリ等へ）</h3>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <ul class="list-disc pl-5 text-sm text-gray-300 space-y-1">
+                        <li><strong>助けが必要：</strong> 両手を大きく上に挙げて「Y」の字を作る</li>
+                        <li><strong>助けは不要：</strong> 片手だけを斜め上に挙げる</li>
+                        <li>鏡やスマホの画面で太陽の光を反射させ、チカチカさせて合図を送る</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <p class="text-xs text-gray-500 mt-10 text-center">このマニュアルはオフライン（圏外）でも閲覧可能です。</p>
         </div>
-        <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
+    </div>
+
+    <!-- 下部タブバー -->
+    <div id="bottom-tab-bar">
+        <button class="tab-btn active" onclick="switchTab('map')">
+            <span class="tab-icon">🗺️</span>
+            <span>マップ</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('manual')">
+            <span class="tab-icon">📖</span>
+            <span>マニュアル</span>
+        </button>
     </div>
 
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW登録エラー:', err));
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SWエラー:', err));
+        }
+
+        // タブ切り替え機能
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+
+            if (tabId === 'map' && map) {
+                map.invalidateSize(); // 地図の描画バグ防止
+            }
         }
 
         let map;
         let allShelters = [];
-        let markerLayer;
+        let markerClusterGroup; // クラスター（グループ化）用の変数
+        let hazardLayer = null; // ハザードマップレイヤー
         let routeLayer = null;
         let directLine = null;
         let targetShelter = null;
         let lastRouteFetchTime = 0;
-        let lastRenderedCenter = null;
         let openedPopupKey = null;
 
-        let currentLat = 35.49895; // 初期値（市原市付近）
+        let currentLat = 35.49895;
         let currentLng = 140.05860;
         let currentHeading = 0;
         let targetHeading = 0;
@@ -165,10 +257,8 @@
 
         const startBtn = document.getElementById('start-btn');
         const startScreen = document.getElementById('start-screen');
-        const mapWrapper = document.getElementById('map-wrapper');
         const centerMarker = document.getElementById('center-marker');
         const resumeBtn = document.getElementById('resume-btn');
-        const uiOverlay = document.getElementById('ui-overlay');
         const statusText = document.getElementById('status-text');
         const shelterCount = document.getElementById('shelter-count');
         const mapContainer = document.getElementById('map-container');
@@ -182,6 +272,7 @@
         const searchResults = document.getElementById('search-results');
         const clearSearchBtn = document.getElementById('clear-search-btn');
         const downloadMapBtn = document.getElementById('download-map-btn');
+        const hazardBtn = document.getElementById('hazard-btn');
 
         window.startNavigationTo = function(name, lat, lng) {
             openedPopupKey = null;
@@ -189,166 +280,90 @@
             setTargetShelter(name, lat, lng);
         };
 
-        // 1. スタートボタン押下時
+        // 1. スタートボタン
         startBtn.addEventListener('click', async () => {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
-                    if (permission !== 'granted') {
-                        alert('コンパスの利用が許可されませんでした。');
-                        return; 
-                    }
-                } catch (error) {
-                    console.error(error);
-                }
+                    if (permission !== 'granted') return alert('コンパスが許可されませんでした。');
+                } catch (e) { console.error(e); }
             }
 
             startScreen.style.display = 'none';
-            mapWrapper.style.display = 'block';
-            centerMarker.style.display = 'block';
-            uiOverlay.style.display = 'flex';
-            searchBox.style.display = 'block';
-
+            document.getElementById('tab-map').classList.add('active'); // マップを最初に表示
+            
             initMap();
             startSensors();
         });
 
-        // 2. 地図の初期構築
+        // 2. 地図の初期化
         function initMap() {
-            map = L.map('map', {
-                zoomControl: false,
-                attributionControl: false
-            }).setView([currentLat, currentLng], 15);
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([currentLat, currentLng], 15);
 
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 17,
-                keepBuffer: 6,
-                updateWhenZooming: false
+                maxZoom: 17, keepBuffer: 6, updateWhenZooming: false
             }).addTo(map);
 
-            markerLayer = L.layerGroup().addTo(map);
+            // 【クラスター化の設定】
+            markerClusterGroup = L.markerClusterGroup({
+                disableClusteringAtZoom: 16, // ズーム16以上ではグループ化を解除してバラバラにする
+                maxClusterRadius: 50,
+                spiderfyOnMaxZoom: false
+            });
+            map.addLayer(markerClusterGroup);
 
-            map.on('popupclose', () => {
-                if (!window.isRedrawingMarkers) {
-                    openedPopupKey = null;
-                }
+            // 【ハザードマップ（国土地理院 浸水想定区域）の設定】
+            // ネット接続時のみ表示可能（完全無料）
+            hazardLayer = L.tileLayer('https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png', {
+                opacity: 0.6,
+                maxNativeZoom: 15,
+                maxZoom: 17
             });
 
             shelterCount.innerText = 'データ読込中...';
-            fetch('./shelters.json')
-                .then(res => res.json())
-                .then(data => {
-                    allShelters = data;
-                    updateVisibleShelters(currentLat, currentLng, true);
-                })
-                .catch(err => {
-                    shelterCount.innerText = 'データ読込失敗';
-                });
+            fetch('./shelters.json').then(res => res.json()).then(data => {
+                allShelters = data;
+                renderAllShelters(); // クラスター化により全件一括描画しても軽いです
+            });
 
             map.on('dragstart', () => {
                 isTracking = false;
                 resumeBtn.style.display = 'block';
             });
-
-            map.on('moveend', () => {
-                const center = map.getCenter();
-                if (!lastRenderedCenter || center.distanceTo(lastRenderedCenter) > 1000) {
-                    updateVisibleShelters(center.lat, center.lng, false);
-                }
-            });
         }
 
-        // 周辺地図を一括ダウンロードして保存する機能
-        downloadMapBtn.addEventListener('click', async () => {
-            if (!navigator.onLine) {
-                alert('オフライン（機内モード）中は地図をダウンロードできません。ネットに接続した状態で押してください。');
-                return;
-            }
-
-            const center = map.getCenter();
-            const cLat = center.lat;
-            const cLng = center.lng;
-
-            const zoomConfigs = [
-                { z: 13, radius: 1 },
-                { z: 14, radius: 1 },
-                { z: 15, radius: 2 },
-                { z: 16, radius: 4 }
-            ];
-
-            const urls = [];
-            for (const cfg of zoomConfigs) {
-                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z));
-                const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
-                
-                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) {
-                    for (let dy = -cfg.radius; dy <= cfg.radius; dy++) {
-                        urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`);
-                    }
+        // ハザードマップのON/OFF切り替え
+        hazardBtn.addEventListener('click', () => {
+            if (map.hasLayer(hazardLayer)) {
+                map.removeLayer(hazardLayer);
+                hazardBtn.innerText = '⚠️ 浸水ハザード (オフ)';
+                hazardBtn.classList.remove('active');
+            } else {
+                if (!navigator.onLine) {
+                    alert('ハザードマップの表示にはインターネット接続が必要です。');
+                    return;
                 }
+                map.addLayer(hazardLayer);
+                hazardBtn.innerText = '⚠️ 浸水ハザード (オン)';
+                hazardBtn.classList.add('active');
             }
-
-            downloadMapBtn.disabled = true;
-            downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
-            
-            const cache = await caches.open('hinanjo-navi-tiles-v3');
-            let saved = 0;
-
-            for (let i = 0; i < urls.length; i++) {
-                const url = urls[i];
-                downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
-                try {
-                    const existing = await cache.match(url);
-                    if (!existing) {
-                        const res = await fetch(url);
-                        if (res.ok) {
-                            await cache.put(url, res);
-                            saved++;
-                        }
-                        await new Promise(r => setTimeout(r, 100));
-                    } else {
-                        saved++;
-                    }
-                } catch (e) {
-                    console.warn('タイル取得スキップ:', url);
-                }
-            }
-
-            downloadMapBtn.innerText = `保存完了！(${saved}枚)`;
-            downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
-            setTimeout(() => {
-                downloadMapBtn.innerText = '周辺地図を保存（圏外用）';
-                downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
-                downloadMapBtn.disabled = false;
-            }, 4000);
         });
 
-        // トイレ用アイコン定義
         const toiletIcon = L.divIcon({
-            className: 'toilet-pin',
-            html: 'WC',
-            iconSize: [26, 26],
-            iconAnchor: [13, 13]
+            className: 'toilet-pin', html: 'WC', iconSize: [26, 26], iconAnchor: [13, 13]
         });
 
-        // 3. 周辺の避難所・トイレ描画
-        function updateVisibleShelters(centerLat, centerLng, force) {
-            if (!allShelters || allShelters.length === 0) return;
-            
-            lastRenderedCenter = L.latLng(centerLat, centerLng);
-            window.isRedrawingMarkers = true;
-            markerLayer.clearLayers();
-            
-            let count = 0;
-            const range = 0.15;
+        // 3. マーカーの描画（クラスター対応版）
+        function renderAllShelters() {
+            markerClusterGroup.clearLayers();
+            const markers = [];
 
             for (let i = 0; i < allShelters.length; i++) {
                 const s = allShelters[i];
                 const sLat = Number(s.lat);
                 const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
 
-                if (!isNaN(sLat) && !isNaN(sLon) && Math.abs(sLat - centerLat) < range && Math.abs(sLon - centerLng) < range) {
-                    const key = `${s.name}_${sLat}_${sLon}`;
+                if (!isNaN(sLat) && !isNaN(sLon)) {
                     const safeName = s.name.replace(/'/g, "\\'");
                     const badges = [];
                     if (s.isEmg) badges.push('<span class="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5 rounded">緊急避難</span>');
@@ -369,26 +384,18 @@
                     const isToiletOnly = (s.hasTo === 1 && !s.isEmg && !s.isShl);
                     const markerOptions = isToiletOnly ? { icon: toiletIcon } : {};
 
-                    const marker = L.marker([sLat, sLon], markerOptions)
-                     .addTo(markerLayer)
-                     .bindPopup(html, { autoClose: true, closeOnClick: false });
-
-                    marker.on('click', () => {
-                        openedPopupKey = key;
-                    });
-
-                    if (openedPopupKey === key) {
-                        marker.openPopup();
-                    }
-
-                    count++;
+                    const marker = L.marker([sLat, sLon], markerOptions).bindPopup(html);
+                    markers.push(marker);
                 }
             }
-            window.isRedrawingMarkers = false;
-            shelterCount.innerText = `表示中: ${count}件 / 全${allShelters.length}件`;
+            
+            // 全てのマーカーをグループ（クラスター）にまとめて追加
+            markerClusterGroup.addLayers(markers);
+            shelterCount.innerText = `全${allShelters.length}件を読込済`;
         }
 
-        // 検索機能
+        // --- 以下、既存の検索、ルート案内、センサー処理（変更なし） ---
+        
         searchInput.addEventListener('input', (e) => {
             const keyword = e.target.value.trim();
             if (!keyword) {
@@ -409,10 +416,7 @@
                     const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
                     const item = document.createElement('div');
                     item.className = 'p-3 text-sm hover:bg-gray-800 cursor-pointer flex justify-between items-center';
-                    item.innerHTML = `
-                        <span class="font-bold text-white truncate pr-2">${s.name}</span>
-                        <span class="text-xs bg-yellow-500 text-black font-bold px-2.5 py-1 rounded shrink-0">経路案内</span>
-                    `;
+                    item.innerHTML = `<span class="font-bold text-white truncate pr-2">${s.name}</span><span class="text-xs bg-yellow-500 text-black font-bold px-2.5 py-1 rounded shrink-0">経路案内</span>`;
                     item.addEventListener('click', () => {
                         setTargetShelter(s.name, sLat, sLon);
                         searchResults.classList.add('hidden');
@@ -425,175 +429,137 @@
         });
 
         clearSearchBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            searchResults.classList.add('hidden');
-            clearSearchBtn.classList.add('hidden');
+            searchInput.value = ''; searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden');
         });
 
-        // 4. 目的地セット＆経路描画
         function setTargetShelter(name, lat, lng) {
             targetShelter = { name, lat, lng };
             targetNameEl.innerText = name;
             navPanel.style.display = 'flex';
-            isTracking = true;
-            resumeBtn.style.display = 'none';
-            
-            map.invalidateSize({ animate: false });
-            map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
-            
-            updateVisibleShelters(currentLat, currentLng, true);
-            lastRouteFetchTime = 0;
-            updateNavigationRoute();
+            isTracking = true; resumeBtn.style.display = 'none';
+            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+            lastRouteFetchTime = 0; updateNavigationRoute();
         }
 
         cancelNavBtn.addEventListener('click', () => {
-            targetShelter = null;
-            navPanel.style.display = 'none';
-            if (routeLayer) {
-                map.removeLayer(routeLayer);
-                routeLayer = null;
-            }
-            if (directLine) {
-                map.removeLayer(directLine);
-                directLine = null;
-            }
+            targetShelter = null; navPanel.style.display = 'none';
+            if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+            if (directLine) { map.removeLayer(directLine); directLine = null; }
         });
 
         async function updateNavigationRoute() {
             if (!targetShelter) return;
-
-            const from = L.latLng(currentLat, currentLng);
-            const to = L.latLng(targetShelter.lat, targetShelter.lng);
+            const from = L.latLng(currentLat, currentLng); const to = L.latLng(targetShelter.lat, targetShelter.lng);
             const directDist = Math.round(from.distanceTo(to));
 
-            if (directLine) {
-                directLine.setLatLngs([from, to]);
-            } else {
-                directLine = L.polyline([from, to], {
-                    color: '#ef4444',
-                    weight: 3,
-                    opacity: 0.6,
-                    dashArray: '8, 8'
-                }).addTo(map);
-            }
+            if (directLine) { directLine.setLatLngs([from, to]); } 
+            else { directLine = L.polyline([from, to], { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '8, 8' }).addTo(map); }
 
-            const now = Date.now();
-            if (now - lastRouteFetchTime < 10000 && routeLayer) {
-                return;
-            }
+            const now = Date.now(); if (now - lastRouteFetchTime < 10000 && routeLayer) return;
             lastRouteFetchTime = now;
 
             try {
                 const url = `https://router.project-osrm.org/route/v1/foot/${currentLng},${currentLat};${targetShelter.lng},${targetShelter.lat}?overview=full&geometries=geojson`;
                 const res = await fetch(url);
-                if (!res.ok) throw new Error('Route API Error');
+                if (!res.ok) throw new Error();
                 const data = await res.json();
 
                 if (data.routes && data.routes.length > 0) {
-                    const route = data.routes[0];
-                    const routeDist = Math.round(route.distance);
+                    const route = data.routes[0]; const routeDist = Math.round(route.distance);
                     const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
 
-                    routeModeLabel.innerText = '道路ルート案内中（青線）';
-                    routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
-                    targetDistEl.innerText = routeDist >= 1000 
-                        ? `道なり ${(routeDist / 1000).toFixed(2)} km` 
-                        : `道なり ${routeDist} m`;
+                    routeModeLabel.innerText = '道路ルート案内中（青線）'; routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
+                    targetDistEl.innerText = routeDist >= 1000 ? `道なり ${(routeDist / 1000).toFixed(2)} km` : `道なり ${routeDist} m`;
 
-                    if (routeLayer) {
-                        routeLayer.setLatLngs(coords);
-                    } else {
-                        routeLayer = L.polyline(coords, {
-                            color: '#06b6d4',
-                            weight: 7,
-                            opacity: 0.9
-                        }).addTo(map);
-                    }
-                } else {
-                    throw new Error('No route found');
-                }
+                    if (routeLayer) { routeLayer.setLatLngs(coords); } 
+                    else { routeLayer = L.polyline(coords, { color: '#06b6d4', weight: 7, opacity: 0.9 }).addTo(map); }
+                } else throw new Error();
             } catch (err) {
-                if (routeLayer) {
-                    map.removeLayer(routeLayer);
-                    routeLayer = null;
-                }
-                routeModeLabel.innerText = '圏外レーダー誘導（赤点線）';
-                routeModeLabel.className = 'text-xs text-yellow-400 font-bold';
-                targetDistEl.innerText = directDist >= 1000 
-                    ? `直線 ${(directDist / 1000).toFixed(2)} km` 
-                    : `直線 ${directDist} m`;
+                if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+                routeModeLabel.innerText = '圏外レーダー誘導（赤点線）'; routeModeLabel.className = 'text-xs text-yellow-400 font-bold';
+                targetDistEl.innerText = directDist >= 1000 ? `直線 ${(directDist / 1000).toFixed(2)} km` : `直線 ${directDist} m`;
             }
         }
 
-        // 方位センサーの受信処理（0度＝真北の誤判定防止＆360度正規化）
         function handleOrientation(event) {
             let heading = null;
             if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
                 heading = event.webkitCompassHeading;
-            } else if (event.alpha !== null) {
-                heading = (360 - event.alpha) % 360;
-            }
-
-            if (heading !== null && !isNaN(heading)) {
-                targetHeading = ((heading % 360) + 360) % 360;
-            }
+            } else if (event.alpha !== null) { heading = (360 - event.alpha) % 360; }
+            if (heading !== null && !isNaN(heading)) { targetHeading = ((heading % 360) + 360) % 360; }
         }
 
-        // 5. センサー類の開始
         function startSensors() {
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(
                     position => {
-                        currentLat = position.coords.latitude;
-                        currentLng = position.coords.longitude;
+                        currentLat = position.coords.latitude; currentLng = position.coords.longitude;
                         statusText.innerText = 'GPS受信中';
-                        
-                        if (isTracking) {
-                            map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
-                        }
+                        if (isTracking) { map.setView([currentLat, currentLng], map.getZoom(), { animate: false }); }
                         updateNavigationRoute();
                     },
-                    error => {
-                        statusText.innerText = 'GPSエラー: ' + error.message;
-                    },
+                    error => { statusText.innerText = 'GPSエラー: ' + error.message; },
                     { enableHighAccuracy: true, maximumAge: 0 }
                 );
             }
-
-            if ('ondeviceorientationabsolute' in window) {
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            } else {
-                window.addEventListener('deviceorientation', handleOrientation, true);
-            }
-
+            if ('ondeviceorientationabsolute' in window) { window.addEventListener('deviceorientationabsolute', handleOrientation, true); } 
+            else { window.addEventListener('deviceorientation', handleOrientation, true); }
             updateRotation();
         }
 
-        // 6. 地図の回転アニメーション（0〜360度正規化でフリーズ防止）
         function updateRotation() {
             let diff = targetHeading - currentHeading;
-            if (diff > 180) diff -= 360;
-            if (diff < -180) diff += 360;
-            
+            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
             currentHeading += diff * 0.15;
             currentHeading = ((currentHeading % 360) + 360) % 360;
             
-            if (isTracking) {
-                mapContainer.style.transform = `rotate(-${currentHeading}deg)`;
-            } else {
-                mapContainer.style.transform = `rotate(0deg)`;
-            }
-
+            if (isTracking) { mapContainer.style.transform = `rotate(-${currentHeading}deg)`; } 
+            else { mapContainer.style.transform = `rotate(0deg)`; }
             requestAnimationFrame(updateRotation);
         }
 
-        // 7. GPS追従モードへの復帰
         resumeBtn.addEventListener('click', () => {
-            isTracking = true;
-            resumeBtn.style.display = 'none';
-            map.invalidateSize({ animate: false });
-            map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+            isTracking = true; resumeBtn.style.display = 'none';
+            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
         });
+
+        // 周辺地図を一括ダウンロード（ハザードマップは重すぎるため対象外）
+        downloadMapBtn.addEventListener('click', async () => {
+            if (!navigator.onLine) return alert('オフライン中はダウンロードできません。');
+            
+            const center = map.getCenter(); const cLat = center.lat; const cLng = center.lng;
+            const zoomConfigs = [ { z: 13, radius: 1 }, { z: 14, radius: 1 }, { z: 15, radius: 2 }, { z: 16, radius: 4 } ];
+            const urls = [];
+            
+            for (const cfg of zoomConfigs) {
+                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z));
+                const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
+                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) {
+                    for (let dy = -cfg.radius; dy <= cfg.radius; dy++) {
+                        urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`);
+                    }
+                }
+            }
+
+            downloadMapBtn.disabled = true; downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
+            const cache = await caches.open('hinanjo-navi-tiles-v3'); let saved = 0;
+
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i]; downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
+                try {
+                    const existing = await cache.match(url);
+                    if (!existing) {
+                        const res = await fetch(url);
+                        if (res.ok) { await cache.put(url, res); saved++; }
+                        await new Promise(r => setTimeout(r, 50));
+                    } else { saved++; }
+                } catch (e) {}
+            }
+
+            downloadMapBtn.innerText = `保存完了！(${saved}枚)`; downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
+            setTimeout(() => { downloadMapBtn.innerText = '周辺地図を保存（圏外用）'; downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600'); downloadMapBtn.disabled = false; }, 4000);
+        });
+
     </script>
 </body>
 </html>
