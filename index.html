@@ -26,7 +26,8 @@
         .manual-category { background-color: #334155; padding: 12px 16px; font-weight: bold; color: #eab308; border-radius: 8px; margin-bottom: 16px; margin-top: 24px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .manual-item { background-color: #1f2937; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #64748b; }
 
-        #map-container { position: absolute; top: -50vh; left: -50vw; width: 200vw; height: 200vh; will-change: transform; }
+        /* 地図の巨大化と回転設定を解除し、通常サイズに戻す */
+        #map-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         #map { width: 100%; height: 100%; background: #1e293b; }
 
         #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; }
@@ -56,7 +57,7 @@
 
     <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] p-6 text-center">
         <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
-        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。</p>
+        <p class="text-gray-400 text-sm mb-8">自分が向いている方向にピンが回転します。</p>
         <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">ナビゲーション開始</button>
     </div>
 
@@ -151,6 +152,7 @@
         const startBtn = document.getElementById('start-btn'), startScreen = document.getElementById('start-screen');
         const resumeBtn = document.getElementById('resume-btn'), statusText = document.getElementById('status-text');
         const shelterCount = document.getElementById('shelter-count'), mapContainer = document.getElementById('map-container');
+        const centerMarker = document.getElementById('center-marker'); // ピンの要素を追加
         const navPanel = document.getElementById('nav-panel'), routeModeLabel = document.getElementById('route-mode-label');
         const targetNameEl = document.getElementById('target-name'), targetDistEl = document.getElementById('target-dist');
         const cancelNavBtn = document.getElementById('cancel-nav-btn'), searchBox = document.getElementById('search-box');
@@ -209,7 +211,6 @@
             markerClusterGroup.addLayers(markers); shelterCount.innerText = `全${allShelters.length}件を読込済`;
         }
 
-        // --- 複合検索エンジン (避難所 ＋ 住所/駅名API) ---
         let searchTimeout;
         searchInput.addEventListener('input', (e) => {
             const keyword = e.target.value.trim();
@@ -223,7 +224,6 @@
             searchTimeout = setTimeout(async () => {
                 searchResults.innerHTML = '';
                 
-                // 1. オフライン避難所・トイレ検索
                 const localMatches = allShelters.filter(s => s.name && s.name.includes(keyword)).slice(0, 10);
                 if (localMatches.length > 0) {
                     const header = document.createElement('div');
@@ -243,7 +243,6 @@
                     });
                 }
 
-                // 2. オンライン地名・駅名検索 (Nominatim API)
                 if (navigator.onLine) {
                     try {
                         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&limit=5&countrycodes=jp`);
@@ -258,14 +257,13 @@
                             geoData.forEach(place => {
                                 const item = document.createElement('div');
                                 item.className = 'p-3 text-sm hover:bg-gray-700 cursor-pointer flex justify-between items-center border-b border-gray-800';
-                                // 名称を少し整える
                                 const displayName = place.name ? place.name : place.display_name.split(',')[0];
                                 
                                 item.innerHTML = `<span class="font-bold text-white truncate pr-2">${displayName}</span><span class="text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded shrink-0">移動</span>`;
                                 item.addEventListener('click', () => {
                                     const lat = Number(place.lat); const lng = Number(place.lon);
                                     isTracking = false; resumeBtn.style.display = 'block';
-                                    map.setView([lat, lng], 15, { animate: false }); // 地図をジャンプさせる
+                                    map.setView([lat, lng], 15, { animate: false });
                                     searchResults.classList.add('hidden'); searchInput.value = displayName;
                                 });
                                 searchResults.appendChild(item);
@@ -277,7 +275,7 @@
                 if (searchResults.innerHTML === '') {
                     searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する情報が見つかりません</div>';
                 }
-            }, 600); // サーバー負荷軽減のために入力を0.6秒待ってから検索開始
+            }, 600);
         });
 
         clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden'); });
@@ -351,7 +349,10 @@
             let diff = targetHeading - currentHeading;
             if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
             currentHeading += diff * 0.15; currentHeading = ((currentHeading % 360) + 360) % 360;
-            mapContainer.style.transform = `rotate(-${currentHeading}deg)`;
+            
+            // 地図ではなく、自分のピン（中心マーカー）を回転させる
+            centerMarker.style.transform = `translate(-50%, -50%) rotate(${currentHeading}deg)`;
+            
             requestAnimationFrame(updateRotation);
         }
 
