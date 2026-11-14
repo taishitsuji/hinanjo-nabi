@@ -1,396 +1,383 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>オフライン避難所ナビ</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon.png">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Leaflet & MarkerCluster CSS/JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>オフライン避難所ナビ</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet & MarkerCluster CSS/JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-    <style>
-        body { overflow: hidden; touch-action: none; background-color: #0f172a; margin: 0; }
-        
-        .tab-content { position: absolute; top: 0; left: 0; right: 0; bottom: 65px; display: none; overflow: hidden; }
-        .tab-content.active { display: block; }
-        
-        #manual-content { overflow-y: auto; touch-action: pan-y; background-color: #1e293b; padding: 20px; }
-        .manual-category { background-color: #334155; padding: 12px 16px; font-weight: bold; color: #eab308; border-radius: 8px; margin-bottom: 16px; margin-top: 24px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .manual-item { background-color: #1f2937; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #64748b; }
+    <style>
+        body { overflow: hidden; touch-action: none; background-color: #0f172a; margin: 0; }
+        
+        .tab-content { position: absolute; top: 0; left: 0; right: 0; bottom: 65px; display: none; overflow: hidden; }
+        .tab-content.active { display: block; }
+        
+        #manual-content { overflow-y: auto; touch-action: pan-y; background-color: #1e293b; padding: 20px; }
+        .manual-category { background-color: #334155; padding: 12px 16px; font-weight: bold; color: #eab308; border-radius: 8px; margin-bottom: 16px; margin-top: 24px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .manual-item { background-color: #1f2937; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #64748b; }
 
-        #map-container { position: absolute; top: -50vh; left: -50vw; width: 200vw; height: 200vh; will-change: transform; }
-        #map { width: 100%; height: 100%; background: #1e293b; }
+        #map-container { position: absolute; top: -50vh; left: -50vw; width: 200vw; height: 200vh; will-change: transform; }
+        #map { width: 100%; height: 100%; background: #1e293b; }
 
-        #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; }
-        #center-marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 40; width: 40px; height: 40px; pointer-events: none; }
-        #resume-btn { position: absolute; bottom: 70px; right: 16px; z-index: 60; display: none; }
-        
-        #search-box { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 65; }
-        #search-results { max-height: 300px; overflow-y: auto; touch-action: pan-y; }
+        #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; }
+        #center-marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 40; width: 40px; height: 40px; pointer-events: none; }
+        #resume-btn { position: absolute; bottom: 70px; right: 16px; z-index: 60; display: none; }
+        
+        #search-box { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 65; }
+        #search-results { max-height: 300px; overflow-y: auto; touch-action: pan-y; }
 
-        #nav-panel { position: absolute; top: 72px; left: 16px; right: 16px; z-index: 55; background: rgba(15, 23, 42, 0.94); border: 2px solid #eab308; border-radius: 12px; padding: 12px 16px; display: none; }
-        
-        #hazard-btn { position: absolute; top: 75px; right: 16px; z-index: 60; background: rgba(15, 23, 42, 0.8); border: 2px solid #ef4444; color: white; font-weight: bold; font-size: 12px; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        #hazard-btn.active { background: #ef4444; color: white; }
+        #nav-panel { position: absolute; top: 72px; left: 16px; right: 16px; z-index: 55; background: rgba(15, 23, 42, 0.94); border: 2px solid #eab308; border-radius: 12px; padding: 12px 16px; display: none; }
+        
+        #hazard-btn { position: absolute; top: 75px; right: 16px; z-index: 60; background: rgba(15, 23, 42, 0.8); border: 2px solid #ef4444; color: white; font-weight: bold; font-size: 12px; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #hazard-btn.active { background: #ef4444; color: white; }
 
-        #hazard-legend { position: absolute; bottom: 85px; left: 16px; z-index: 60; background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; padding: 10px; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none; }
-        .legend-color { width: 14px; height: 14px; display: inline-block; border-radius: 2px; margin-right: 6px; }
+        #hazard-legend { position: absolute; bottom: 85px; left: 16px; z-index: 60; background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; padding: 10px; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none; }
+        .legend-color { width: 14px; height: 14px; display: inline-block; border-radius: 2px; margin-right: 6px; }
 
-        .toilet-pin { background-color: #10b981; border: 2px solid white; border-radius: 50%; color: white; font-weight: bold; font-size: 11px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .toilet-pin { background-color: #10b981; border: 2px solid white; border-radius: 50%; color: white; font-weight: bold; font-size: 11px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 
-        #bottom-tab-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 65px; background-color: #0f172a; border-top: 1px solid #334155; display: flex; z-index: 100; }
-        .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 11px; font-weight: bold; padding: 5px; }
-        .tab-btn.active { color: #eab308; }
-        .tab-icon { font-size: 20px; margin-bottom: 2px; }
-    </style>
+        #bottom-tab-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 65px; background-color: #0f172a; border-top: 1px solid #334155; display: flex; z-index: 100; }
+        .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 11px; font-weight: bold; padding: 5px; }
+        .tab-btn.active { color: #eab308; }
+        .tab-icon { font-size: 20px; margin-bottom: 2px; }
+    </style>
 </head>
 <body class="text-white font-sans selection:bg-yellow-500 selection:text-black">
 
-    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] p-6 text-center">
-        <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
-        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。</p>
-        <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">ナビゲーション開始</button>
-    </div>
+    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] p-6 text-center">
+        <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
+        <p class="text-gray-400 text-sm mb-8">自分が向いている方向に地図が回転します。</p>
+        <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">ナビゲーション開始</button>
+    </div>
 
-    <!-- コンテンツ: マップ -->
-    <div id="tab-map" class="tab-content">
-        <div id="map-container"><div id="map"></div></div>
+    <!-- コンテンツ: マップ -->
+    <div id="tab-map" class="tab-content">
+        <div id="map-container"><div id="map"></div></div>
 
-        <button id="hazard-btn">⚠️ 浸水ハザード (オフ)</button>
+        <button id="hazard-btn">⚠️ 浸水ハザード (オフ)</button>
 
-        <div id="hazard-legend">
-            <div class="text-[11px] font-bold text-gray-300 mb-1.5 border-b border-gray-600 pb-1">浸水深の目安（国土地理院）</div>
-            <ul class="text-[10px] space-y-1">
-                <li class="flex items-center"><span class="legend-color" style="background: rgba(220,122,220,0.8);"></span> 10.0m〜20.0m (4階以上水没)</li>
-                <li class="flex items-center"><span class="legend-color" style="background: rgba(242,133,201,0.8);"></span> 5.0m〜10.0m (3階が水没)</li>
-                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,145,145,0.8);"></span> 3.0m〜5.0m (2階が水没)</li>
-                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,183,183,0.8);"></span> 0.5m〜3.0m (1階が水没)</li>
-                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,255,179,0.8);"></span> 0.5m未満 (大人の膝下まで)</li>
-            </ul>
-        </div>
+        <div id="hazard-legend">
+            <div class="text-[11px] font-bold text-gray-300 mb-1.5 border-b border-gray-600 pb-1">浸水深の目安（国土地理院）</div>
+            <ul class="text-[10px] space-y-1">
+                <li class="flex items-center"><span class="legend-color" style="background: rgba(220,122,220,0.8);"></span> 10.0m〜20.0m (4階以上水没)</li>
+                <li class="flex items-center"><span class="legend-color" style="background: rgba(242,133,201,0.8);"></span> 5.0m〜10.0m (3階が水没)</li>
+                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,145,145,0.8);"></span> 3.0m〜5.0m (2階が水没)</li>
+                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,183,183,0.8);"></span> 0.5m〜3.0m (1階が水没)</li>
+                <li class="flex items-center"><span class="legend-color" style="background: rgba(255,255,179,0.8);"></span> 0.5m未満 (大人の膝下まで)</li>
+            </ul>
+        </div>
 
-        <div id="search-box">
-            <div class="relative">
-                <input type="text" id="search-input" placeholder="避難所・地名・駅名で検索" class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
-                <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
-            </div>
-            <div id="search-results" class="hidden bg-gray-900/95 border border-gray-700 rounded-lg mt-1 shadow-xl"></div>
-        </div>
-        
-        <div id="nav-panel" class="flex justify-between items-center shadow-lg">
-            <div>
-                <div id="route-mode-label" class="text-xs text-yellow-400 font-bold">ルート検索中...</div>
-                <div id="target-name" class="text-base font-bold truncate max-w-[210px]">-</div>
-                <div id="target-dist" class="text-xl font-extrabold text-white mt-0.5">残り --- m</div>
-            </div>
-            <button id="cancel-nav-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2.5 px-3.5 rounded-lg shrink-0">案内終了</button>
-        </div>
+        <div id="search-box">
+            <div class="relative">
+                <input type="text" id="search-input" placeholder="避難所・地名・駅名で検索" class="w-full bg-gray-900/95 text-white border border-gray-600 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-yellow-400 shadow-lg">
+                <button id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-gray-400 text-sm font-bold">✕</button>
+            </div>
+            <div id="search-results" class="hidden bg-gray-900/95 border border-gray-700 rounded-lg mt-1 shadow-xl"></div>
+        </div>
+        
+        <div id="nav-panel" class="flex justify-between items-center shadow-lg">
+            <div>
+                <div id="route-mode-label" class="text-xs text-yellow-400 font-bold">ルート検索中...</div>
+                <div id="target-name" class="text-base font-bold truncate max-w-[210px]">-</div>
+                <div id="target-dist" class="text-xl font-extrabold text-white mt-0.5">残り --- m</div>
+            </div>
+            <button id="cancel-nav-btn" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2.5 px-3.5 rounded-lg shrink-0">案内終了</button>
+        </div>
 
-        <div id="center-marker">
-            <div class="w-6 h-6 bg-blue-500 border-4 border-white rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] mx-auto mt-2 relative"><div class="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-500"></div></div>
-        </div>
-        
-        <button id="resume-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-full text-sm shadow-lg active:scale-95 transition">GPSに追従する</button>
+        <div id="center-marker">
+            <div class="w-6 h-6 bg-blue-500 border-4 border-white rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] mx-auto mt-2 relative"><div class="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-500"></div></div>
+        </div>
+        
+        <button id="resume-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-5 rounded-full text-sm shadow-lg active:scale-95 transition">GPSに追従する</button>
 
-        <div id="ui-overlay" class="flex flex-col gap-2 text-xs">
-            <div class="flex justify-between items-center">
-                <button id="download-map-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2 px-3.5 rounded-lg shadow flex items-center gap-1.5 transition"><span>周辺地図を保存（圏外用）</span></button>
-                <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
-            </div>
-            <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
-        </div>
-    </div>
+        <div id="ui-overlay" class="flex flex-col gap-2 text-xs">
+            <div class="flex justify-between items-center">
+                <button id="download-map-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2 px-3.5 rounded-lg shadow flex items-center gap-1.5 transition"><span>周辺地図を保存（圏外用）</span></button>
+                <div id="shelter-count" class="text-yellow-400 font-bold text-right"></div>
+            </div>
+            <div id="status-text" class="text-gray-300">GPS測位待機中...</div>
+        </div>
+    </div>
 
-    <!-- コンテンツ: マニュアル -->
-    <div id="tab-manual" class="tab-content" style="height: calc(100vh - 65px);">
-        <div id="manual-content" class="h-full w-full max-w-2xl mx-auto pb-10">
-            <h2 class="text-2xl font-bold text-white mb-2 pb-2">📖 防災マニュアル</h2>
-            <p class="text-xs text-gray-400 mb-4">※このページは通信圏外（オフライン）でも閲覧できます。</p>
-            
-            <div class="manual-category">🩸 応急手当・医療</div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">出血している時（止血法）</h3><p class="text-sm text-gray-300 mb-2"><strong>直接圧迫止血法：</strong> 最も確実で安全な方法です。</p><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>清潔なガーゼやタオルを傷口に直接当てる</li><li>その上から両手で強く圧迫する（体重をかける）</li><li>血が止まるまで数分〜数十分、離さずに圧迫し続ける</li></ul></div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">骨折・ねんざの固定</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>雑誌、段ボール、傘などを添え木（副子）にする</li><li>骨折部位の「上下の関節」を含めて固定する</li><li>タオルやネクタイで添え木を縛る（きつく締めすぎない）</li></ul></div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">やけどをした時</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>すぐに水道水などで<strong>15分以上冷やす</strong></li><li>服の上からのやけどは、服を脱がさずに上から水をかける</li><li>水ぶくれができても絶対に破らない</li></ul></div>
+    <!-- コンテンツ: マニュアル -->
+    <div id="tab-manual" class="tab-content" style="height: calc(100vh - 65px);">
+        <div id="manual-content" class="h-full w-full max-w-2xl mx-auto pb-10">
+            <h2 class="text-2xl font-bold text-white mb-2 pb-2">📖 防災マニュアル</h2>
+            <p class="text-xs text-gray-400 mb-4">※このページは通信圏外（オフライン）でも閲覧できます。</p>
+            
+            <div class="manual-category">🩸 応急手当・医療</div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">出血している時（止血法）</h3><p class="text-sm text-gray-300 mb-2"><strong>直接圧迫止血法：</strong> 最も確実で安全な方法です。</p><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>清潔なガーゼやタオルを傷口に直接当てる</li><li>その上から両手で強く圧迫する（体重をかける）</li><li>血が止まるまで数分〜数十分、離さずに圧迫し続ける</li></ul></div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">骨折・ねんざの固定</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>雑誌、段ボール、傘などを添え木（副子）にする</li><li>骨折部位の「上下の関節」を含めて固定する</li><li>タオルやネクタイで添え木を縛る（きつく締めすぎない）</li></ul></div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">やけどをした時</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>すぐに水道水などで<strong>15分以上冷やす</strong></li><li>服の上からのやけどは、服を脱がさずに上から水をかける</li><li>水ぶくれができても絶対に破らない</li></ul></div>
 
-            <div class="manual-category">💧 サバイバル・生活</div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">簡易トイレの作り方</h3><p class="text-sm text-gray-300 mb-2">断水時、自宅のトイレを使う方法です。水洗で流してはいけません。</p><ol class="list-decimal pl-5 text-sm text-gray-300 space-y-1"><li>便座を上げ、便器にポリ袋（ゴミ袋）を1枚かぶせる</li><li>便座を下ろし、もう1枚ポリ袋をかぶせる</li><li>袋の中にちぎった新聞紙やペットシートを敷き詰める</li><li>使用後は上の袋だけを取り出し、しっかり結んで捨てる</li></ol></div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">寒さ対策・防寒</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>新聞紙を丸めて服の中に入れる（空気の層が保温効果を生む）</li><li>大きめのゴミ袋の底と角に穴を開けポンチョのように被る</li><li>段ボールを床に敷く（地面からの底冷えを防ぐ）</li></ul></div>
+            <div class="manual-category">💧 サバイバル・生活</div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">簡易トイレの作り方</h3><p class="text-sm text-gray-300 mb-2">断水時、自宅のトイレを使う方法です。水洗で流してはいけません。</p><ol class="list-decimal pl-5 text-sm text-gray-300 space-y-1"><li>便座を上げ、便器にポリ袋（ゴミ袋）を1枚かぶせる</li><li>便座を下ろし、もう1枚ポリ袋をかぶせる</li><li>袋の中にちぎった新聞紙やペットシートを敷き詰める</li><li>使用後は上の袋だけを取り出し、しっかり結んで捨てる</li></ol></div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">寒さ対策・防寒</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>新聞紙を丸めて服の中に入れる（空気の層が保温効果を生む）</li><li>大きめのゴミ袋の底と角に穴を開けポンチョのように被る</li><li>段ボールを床に敷く（地面からの底冷えを防ぐ）</li></ul></div>
 
-            <div class="manual-category">🆘 避難・救助要請</div>
-            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">家から避難する時の鉄則</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>必ず<strong>ブレーカーを落としてから</strong>家を出る（通電火災防止）</li><li>ガスの元栓を閉める</li><li>長靴ではなく、底が厚いスニーカーを履く</li></ul></div>
-            <div class="manual-item border-l-red-500"><h3 class="text-lg font-bold text-white mb-1 text-red-400">災害用伝言ダイヤル「171」</h3><ul class="list-none text-sm text-gray-300 space-y-1 font-mono bg-gray-900 p-2 rounded"><li>録音：171 → 1 → 自分の電話番号</li><li>再生：171 → 2 → 相手の電話番号</li></ul></div>
-        </div>
-    </div>
+            <div class="manual-category">🆘 避難・救助要請</div>
+            <div class="manual-item"><h3 class="text-lg font-bold text-white mb-1">家から避難する時の鉄則</h3><ul class="list-disc pl-5 text-sm text-gray-300 space-y-1"><li>必ず<strong>ブレーカーを落としてから</strong>家を出る（通電火災防止）</li><li>ガスの元栓を閉める</li><li>長靴ではなく、底が厚いスニーカーを履く</li></ul></div>
+            <div class="manual-item border-l-red-500"><h3 class="text-lg font-bold text-white mb-1 text-red-400">災害用伝言ダイヤル「171」</h3><ul class="list-none text-sm text-gray-300 space-y-1 font-mono bg-gray-900 p-2 rounded"><li>録音：171 → 1 → 自分の電話番号</li><li>再生：171 → 2 → 相手の電話番号</li></ul></div>
+        </div>
+    </div>
 
-    <div id="bottom-tab-bar">
-        <button class="tab-btn active" onclick="switchTab('map')"><span class="tab-icon">🗺️</span><span>マップ</span></button>
-        <button class="tab-btn" onclick="switchTab('manual')"><span class="tab-icon">📖</span><span>マニュアル</span></button>
-    </div>
+    <div id="bottom-tab-bar">
+        <button class="tab-btn active" onclick="switchTab('map')"><span class="tab-icon">🗺️</span><span>マップ</span></button>
+        <button class="tab-btn" onclick="switchTab('manual')"><span class="tab-icon">📖</span><span>マニュアル</span></button>
+    </div>
 
-    <script>
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(err => console.log('SWエラー:', err));
+    <script>
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(err => console.log('SWエラー:', err));
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
-            if (tabId === 'map' && map) map.invalidateSize();
-        }
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            if (tabId === 'map' && map) map.invalidateSize();
+        }
 
-        let map, allShelters = [], markerClusterGroup, hazardLayer = null, routeLayer = null, directLine = null, targetShelter = null, lastRouteFetchTime = 0;
-        let currentLat = 35.49895, currentLng = 140.05860, currentHeading = 0, targetHeading = 0, isTracking = true;
+        let map, allShelters = [], markerClusterGroup, hazardLayer = null, routeLayer = null, directLine = null, targetShelter = null, lastRouteFetchTime = 0;
+        let currentLat = 35.49895, currentLng = 140.05860, currentHeading = 0, targetHeading = 0, isTracking = true;
 
-        const startBtn = document.getElementById('start-btn'), startScreen = document.getElementById('start-screen');
-        const resumeBtn = document.getElementById('resume-btn'), statusText = document.getElementById('status-text');
-        const shelterCount = document.getElementById('shelter-count'), mapContainer = document.getElementById('map-container');
-        const navPanel = document.getElementById('nav-panel'), routeModeLabel = document.getElementById('route-mode-label');
-        const targetNameEl = document.getElementById('target-name'), targetDistEl = document.getElementById('target-dist');
-        const cancelNavBtn = document.getElementById('cancel-nav-btn'), searchBox = document.getElementById('search-box');
-        const searchInput = document.getElementById('search-input'), searchResults = document.getElementById('search-results'), clearSearchBtn = document.getElementById('clear-search-btn');
-        const downloadMapBtn = document.getElementById('download-map-btn'), hazardBtn = document.getElementById('hazard-btn'), hazardLegend = document.getElementById('hazard-legend');
+        const startBtn = document.getElementById('start-btn'), startScreen = document.getElementById('start-screen');
+        const resumeBtn = document.getElementById('resume-btn'), statusText = document.getElementById('status-text');
+        const shelterCount = document.getElementById('shelter-count'), mapContainer = document.getElementById('map-container');
+        const navPanel = document.getElementById('nav-panel'), routeModeLabel = document.getElementById('route-mode-label');
+        const targetNameEl = document.getElementById('target-name'), targetDistEl = document.getElementById('target-dist');
+        const cancelNavBtn = document.getElementById('cancel-nav-btn'), searchBox = document.getElementById('search-box');
+        const searchInput = document.getElementById('search-input'), searchResults = document.getElementById('search-results'), clearSearchBtn = document.getElementById('clear-search-btn');
+        const downloadMapBtn = document.getElementById('download-map-btn'), hazardBtn = document.getElementById('hazard-btn'), hazardLegend = document.getElementById('hazard-legend');
 
-        window.startNavigationTo = function(name, lat, lng) {
-            if (map) map.closePopup();
-            setTargetShelter(name, lat, lng);
-        };
+        window.startNavigationTo = function(name, lat, lng) {
+            if (map) map.closePopup();
+            setTargetShelter(name, lat, lng);
+        };
 
-        startBtn.addEventListener('click', async () => {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try { const p = await DeviceOrientationEvent.requestPermission(); if (p !== 'granted') return alert('コンパスが許可されませんでした。'); } catch (e) { console.error(e); }
-            }
-            startScreen.style.display = 'none'; document.getElementById('tab-map').classList.add('active');
-            initMap(); startSensors();
-        });
+        startBtn.addEventListener('click', async () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try { const p = await DeviceOrientationEvent.requestPermission(); if (p !== 'granted') return alert('コンパスが許可されませんでした。'); } catch (e) { console.error(e); }
+            }
+            startScreen.style.display = 'none'; document.getElementById('tab-map').classList.add('active');
+            initMap(); startSensors();
+        });
 
-        function initMap() {
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([currentLat, currentLng], 15);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17, keepBuffer: 6, updateWhenZooming: false }).addTo(map);
+        function initMap() {
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([currentLat, currentLng], 15);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17, keepBuffer: 6, updateWhenZooming: false }).addTo(map);
 
-            markerClusterGroup = L.markerClusterGroup({ disableClusteringAtZoom: 16, maxClusterRadius: 50 }); map.addLayer(markerClusterGroup);
-            hazardLayer = L.tileLayer('https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png', { opacity: 0.7, maxNativeZoom: 15, maxZoom: 17 });
+            markerClusterGroup = L.markerClusterGroup({ disableClusteringAtZoom: 16, maxClusterRadius: 50 }); map.addLayer(markerClusterGroup);
+            hazardLayer = L.tileLayer('https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png', { opacity: 0.7, maxNativeZoom: 15, maxZoom: 17 });
 
-            shelterCount.innerText = 'データ読込中...';
-            
-            // ★変更点：2つのファイルを同時に読み込んで結合する処理★
-            Promise.all([
-                fetch('./shelters.json').then(res => res.json()).catch(() => []), // エラー時は空配列
-                fetch('./toilets_japan_full.json').then(res => res.json()).catch(() => []) // エラー時は空配列
-            ]).then(([sheltersData, toiletsData]) => {
-                allShelters = sheltersData.concat(toiletsData);
-                renderAllShelters();
-            }).catch(err => {
-                console.error("データ読み込みエラー:", err);
-                shelterCount.innerText = '読込エラー';
-            });
-            // ★変更点ここまで★
+            shelterCount.innerText = 'データ読込中...';
+            fetch('./shelters.json').then(res => res.json()).then(data => { allShelters = data; renderAllShelters(); });
+            map.on('dragstart', () => { isTracking = false; resumeBtn.style.display = 'block'; });
+        }
 
-            map.on('dragstart', () => { isTracking = false; resumeBtn.style.display = 'block'; });
-        }
+        hazardBtn.addEventListener('click', () => {
+            if (map.hasLayer(hazardLayer)) {
+                map.removeLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オフ)'; hazardBtn.classList.remove('active'); hazardLegend.style.display = 'none';
+            } else {
+                if (!navigator.onLine) return alert('ハザードマップの表示にはインターネット接続が必要です。');
+                map.addLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オン)'; hazardBtn.classList.add('active'); hazardLegend.style.display = 'block';
+            }
+        });
 
-        hazardBtn.addEventListener('click', () => {
-            if (map.hasLayer(hazardLayer)) {
-                map.removeLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オフ)'; hazardBtn.classList.remove('active'); hazardLegend.style.display = 'none';
-            } else {
-                if (!navigator.onLine) return alert('ハザードマップの表示にはインターネット接続が必要です。');
-                map.addLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オン)'; hazardBtn.classList.add('active'); hazardLegend.style.display = 'block';
-            }
-        });
+        const toiletIcon = L.divIcon({ className: 'toilet-pin', html: 'WC', iconSize: [26, 26], iconAnchor: [13, 13] });
 
-        const toiletIcon = L.divIcon({ className: 'toilet-pin', html: 'WC', iconSize: [26, 26], iconAnchor: [13, 13] });
+        function renderAllShelters() {
+            markerClusterGroup.clearLayers(); const markers = [];
+            for (let i = 0; i < allShelters.length; i++) {
+                const s = allShelters[i]; const sLat = Number(s.lat); const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
+                if (!isNaN(sLat) && !isNaN(sLon)) {
+                    const safeName = s.name.replace(/'/g, "\\'"); const badges = [];
+                    if (s.isEmg) badges.push('<span class="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5 rounded">緊急避難</span>');
+                    if (s.isShl) badges.push('<span class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded">避難所</span>');
+                    if (s.hasTo) badges.push('<span class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded">トイレ</span>');
+                    const html = `<div class="text-center p-1 min-w-[140px]"><div class="font-bold text-gray-900 text-sm mb-1">${s.name}</div><div class="flex justify-center gap-1 mb-2">${badges.join('')}</div><button onclick="window.startNavigationTo('${safeName}', ${sLat}, ${sLon})" class="w-full bg-blue-600 active:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded shadow">ここへ経路案内</button></div>`;
+                    const marker = L.marker([sLat, sLon], (s.hasTo === 1 && !s.isEmg && !s.isShl) ? { icon: toiletIcon } : {}).bindPopup(html); markers.push(marker);
+                }
+            }
+            markerClusterGroup.addLayers(markers); shelterCount.innerText = `全${allShelters.length}件を読込済`;
+        }
 
-        function renderAllShelters() {
-            markerClusterGroup.clearLayers(); const markers = [];
-            for (let i = 0; i < allShelters.length; i++) {
-                const s = allShelters[i]; const sLat = Number(s.lat); const sLon = Number(s.lon !== undefined ? s.lon : s.lng);
-                if (!isNaN(sLat) && !isNaN(sLon)) {
-                    const safeName = s.name.replace(/'/g, "\\'"); const badges = [];
-                    if (s.isEmg) badges.push('<span class="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5 rounded">緊急避難</span>');
-                    if (s.isShl) badges.push('<span class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded">避難所</span>');
-                    if (s.hasTo) badges.push('<span class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded">トイレ</span>');
-                    const html = `<div class="text-center p-1 min-w-[140px]"><div class="font-bold text-gray-900 text-sm mb-1">${s.name}</div><div class="flex justify-center gap-1 mb-2">${badges.join('')}</div><button onclick="window.startNavigationTo('${safeName}', ${sLat}, ${sLon})" class="w-full bg-blue-600 active:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded shadow">ここへ経路案内</button></div>`;
-                    const marker = L.marker([sLat, sLon], (s.hasTo === 1 && !s.isEmg && !s.isShl) ? { icon: toiletIcon } : {}).bindPopup(html); markers.push(marker);
-                }
-            }
-            markerClusterGroup.addLayers(markers); shelterCount.innerText = `全${allShelters.length}件を読込済`;
-        }
+        // --- 複合検索エンジン (避難所 ＋ 住所/駅名API) ---
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+            const keyword = e.target.value.trim();
+            if (!keyword) { searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden'); return; }
+            clearSearchBtn.classList.remove('hidden');
+            
+            searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">検索中...</div>';
+            searchResults.classList.remove('hidden');
 
-        // --- 複合検索エンジン (避難所 ＋ 住所/駅名API) ---
-        let searchTimeout;
-        searchInput.addEventListener('input', (e) => {
-            const keyword = e.target.value.trim();
-            if (!keyword) { searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden'); return; }
-            clearSearchBtn.classList.remove('hidden');
-            
-            searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">検索中...</div>';
-            searchResults.classList.remove('hidden');
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                searchResults.innerHTML = '';
+                
+                // 1. オフライン避難所・トイレ検索
+                const localMatches = allShelters.filter(s => s.name && s.name.includes(keyword)).slice(0, 10);
+                if (localMatches.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = 'bg-gray-800 text-gray-400 text-[10px] px-3 py-1 font-bold sticky top-0 border-b border-gray-700';
+                    header.innerText = '📍 避難所・トイレ (オフライン対応)';
+                    searchResults.appendChild(header);
 
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(async () => {
-                searchResults.innerHTML = '';
-                
-                // 1. オフライン避難所・トイレ検索
-                const localMatches = allShelters.filter(s => s.name && s.name.includes(keyword)).slice(0, 10);
-                if (localMatches.length > 0) {
-                    const header = document.createElement('div');
-                    header.className = 'bg-gray-800 text-gray-400 text-[10px] px-3 py-1 font-bold sticky top-0 border-b border-gray-700';
-                    header.innerText = '📍 避難所・トイレ (オフライン対応)';
-                    searchResults.appendChild(header);
+                    localMatches.forEach(s => {
+                        const item = document.createElement('div');
+                        item.className = 'p-3 text-sm hover:bg-gray-700 cursor-pointer flex justify-between items-center border-b border-gray-800';
+                        item.innerHTML = `<span class="font-bold text-white truncate pr-2">${s.name}</span><span class="text-xs bg-yellow-500 text-black font-bold px-2.5 py-1 rounded shrink-0">案内</span>`;
+                        item.addEventListener('click', () => {
+                            setTargetShelter(s.name, Number(s.lat), Number(s.lon !== undefined ? s.lon : s.lng));
+                            searchResults.classList.add('hidden'); searchInput.value = s.name;
+                        });
+                        searchResults.appendChild(item);
+                    });
+                }
 
-                    localMatches.forEach(s => {
-                        const item = document.createElement('div');
-                        item.className = 'p-3 text-sm hover:bg-gray-700 cursor-pointer flex justify-between items-center border-b border-gray-800';
-                        item.innerHTML = `<span class="font-bold text-white truncate pr-2">${s.name}</span><span class="text-xs bg-yellow-500 text-black font-bold px-2.5 py-1 rounded shrink-0">案内</span>`;
-                        item.addEventListener('click', () => {
-                            setTargetShelter(s.name, Number(s.lat), Number(s.lon !== undefined ? s.lon : s.lng));
-                            searchResults.classList.add('hidden'); searchInput.value = s.name;
-                        });
-                        searchResults.appendChild(item);
-                    });
-                }
+                // 2. オンライン地名・駅名検索 (Nominatim API)
+                if (navigator.onLine) {
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&limit=5&countrycodes=jp`);
+                        const geoData = await res.json();
+                        
+                        if (geoData && geoData.length > 0) {
+                            const header = document.createElement('div');
+                            header.className = 'bg-gray-800 text-gray-400 text-[10px] px-3 py-1 font-bold sticky top-0 border-b border-gray-700';
+                            header.innerText = '🌐 地名・駅名・住所 (オンラインのみ)';
+                            searchResults.appendChild(header);
 
-                // 2. オンライン地名・駅名検索 (Nominatim API)
-                if (navigator.onLine) {
-                    try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&limit=5&countrycodes=jp`);
-                        const geoData = await res.json();
-                        
-                        if (geoData && geoData.length > 0) {
-                            const header = document.createElement('div');
-                            header.className = 'bg-gray-800 text-gray-400 text-[10px] px-3 py-1 font-bold sticky top-0 border-b border-gray-700';
-                            header.innerText = '🌐 地名・駅名・住所 (オンラインのみ)';
-                            searchResults.appendChild(header);
+                            geoData.forEach(place => {
+                                const item = document.createElement('div');
+                                item.className = 'p-3 text-sm hover:bg-gray-700 cursor-pointer flex justify-between items-center border-b border-gray-800';
+                                // 名称を少し整える
+                                const displayName = place.name ? place.name : place.display_name.split(',')[0];
+                                
+                                item.innerHTML = `<span class="font-bold text-white truncate pr-2">${displayName}</span><span class="text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded shrink-0">移動</span>`;
+                                item.addEventListener('click', () => {
+                                    const lat = Number(place.lat); const lng = Number(place.lon);
+                                    isTracking = false; resumeBtn.style.display = 'block';
+                                    map.setView([lat, lng], 15, { animate: false }); // 地図をジャンプさせる
+                                    searchResults.classList.add('hidden'); searchInput.value = displayName;
+                                });
+                                searchResults.appendChild(item);
+                            });
+                        }
+                    } catch (e) { console.warn("オンライン検索エラー", e); }
+                }
 
-                            geoData.forEach(place => {
-                                const item = document.createElement('div');
-                                item.className = 'p-3 text-sm hover:bg-gray-700 cursor-pointer flex justify-between items-center border-b border-gray-800';
-                                // 名称を少し整える
-                                const displayName = place.name ? place.name : place.display_name.split(',')[0];
-                                
-                                item.innerHTML = `<span class="font-bold text-white truncate pr-2">${displayName}</span><span class="text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded shrink-0">移動</span>`;
-                                item.addEventListener('click', () => {
-                                    const lat = Number(place.lat); const lng = Number(place.lon);
-                                    isTracking = false; resumeBtn.style.display = 'block';
-                                    map.setView([lat, lng], 15, { animate: false }); // 地図をジャンプさせる
-                                    searchResults.classList.add('hidden'); searchInput.value = displayName;
-                                });
-                                searchResults.appendChild(item);
-                            });
-                        }
-                    } catch (e) { console.warn("オンライン検索エラー", e); }
-                }
+                if (searchResults.innerHTML === '') {
+                    searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する情報が見つかりません</div>';
+                }
+            }, 600); // サーバー負荷軽減のために入力を0.6秒待ってから検索開始
+        });
 
-                if (searchResults.innerHTML === '') {
-                    searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400">一致する情報が見つかりません</div>';
-                }
-            }, 600); // サーバー負荷軽減のために入力を0.6秒待ってから検索開始
-        });
+        clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden'); });
 
-        clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; searchResults.classList.add('hidden'); clearSearchBtn.classList.add('hidden'); });
+        function setTargetShelter(name, lat, lng) {
+            targetShelter = { name, lat, lng }; targetNameEl.innerText = name; navPanel.style.display = 'flex';
+            isTracking = true; resumeBtn.style.display = 'none';
+            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+            lastRouteFetchTime = 0; updateNavigationRoute();
+        }
 
-        function setTargetShelter(name, lat, lng) {
-            targetShelter = { name, lat, lng }; targetNameEl.innerText = name; navPanel.style.display = 'flex';
-            isTracking = true; resumeBtn.style.display = 'none';
-            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
-            lastRouteFetchTime = 0; updateNavigationRoute();
-        }
+        cancelNavBtn.addEventListener('click', () => {
+            targetShelter = null; navPanel.style.display = 'none';
+            if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+            if (directLine) { map.removeLayer(directLine); directLine = null; }
+        });
 
-        cancelNavBtn.addEventListener('click', () => {
-            targetShelter = null; navPanel.style.display = 'none';
-            if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
-            if (directLine) { map.removeLayer(directLine); directLine = null; }
-        });
+        async function updateNavigationRoute() {
+            if (!targetShelter) return;
+            const from = L.latLng(currentLat, currentLng); const to = L.latLng(targetShelter.lat, targetShelter.lng);
+            const directDist = Math.round(from.distanceTo(to));
 
-        async function updateNavigationRoute() {
-            if (!targetShelter) return;
-            const from = L.latLng(currentLat, currentLng); const to = L.latLng(targetShelter.lat, targetShelter.lng);
-            const directDist = Math.round(from.distanceTo(to));
+            if (directLine) directLine.setLatLngs([from, to]); 
+            else directLine = L.polyline([from, to], { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '8, 8' }).addTo(map);
 
-            if (directLine) directLine.setLatLngs([from, to]); 
-            else directLine = L.polyline([from, to], { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '8, 8' }).addTo(map);
+            const now = Date.now(); if (now - lastRouteFetchTime < 10000 && routeLayer) return;
+            lastRouteFetchTime = now;
 
-            const now = Date.now(); if (now - lastRouteFetchTime < 10000 && routeLayer) return;
-            lastRouteFetchTime = now;
+            try {
+                const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${currentLng},${currentLat};${targetShelter.lng},${targetShelter.lat}?overview=full&geometries=geojson`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0]; const routeDist = Math.round(route.distance);
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routeModeLabel.innerText = '道路ルート案内中（青線）'; routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
+                    targetDistEl.innerText = routeDist >= 1000 ? `道なり ${(routeDist / 1000).toFixed(2)} km` : `道なり ${routeDist} m`;
+                    if (routeLayer) routeLayer.setLatLngs(coords); else routeLayer = L.polyline(coords, { color: '#06b6d4', weight: 7, opacity: 0.9 }).addTo(map);
+                } else throw new Error();
+            } catch (err) {
+                if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+                routeModeLabel.innerText = '圏外レーダー誘導（赤点線）'; routeModeLabel.className = 'text-xs text-yellow-400 font-bold';
+                targetDistEl.innerText = directDist >= 1000 ? `直線 ${(directDist / 1000).toFixed(2)} km` : `直線 ${directDist} m`;
+            }
+        }
 
-            try {
-                const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${currentLng},${currentLat};${targetShelter.lng},${targetShelter.lat}?overview=full&geometries=geojson`);
-                if (!res.ok) throw new Error();
-                const data = await res.json();
-                if (data.routes && data.routes.length > 0) {
-                    const route = data.routes[0]; const routeDist = Math.round(route.distance);
-                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-                    routeModeLabel.innerText = '道路ルート案内中（青線）'; routeModeLabel.className = 'text-xs text-cyan-400 font-bold';
-                    targetDistEl.innerText = routeDist >= 1000 ? `道なり ${(routeDist / 1000).toFixed(2)} km` : `道なり ${routeDist} m`;
-                    if (routeLayer) routeLayer.setLatLngs(coords); else routeLayer = L.polyline(coords, { color: '#06b6d4', weight: 7, opacity: 0.9 }).addTo(map);
-                } else throw new Error();
-            } catch (err) {
-                if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
-                routeModeLabel.innerText = '圏外レーダー誘導（赤点線）'; routeModeLabel.className = 'text-xs text-yellow-400 font-bold';
-                targetDistEl.innerText = directDist >= 1000 ? `直線 ${(directDist / 1000).toFixed(2)} km` : `直線 ${directDist} m`;
-            }
-        }
+        function handleOrientation(event) {
+            let heading = null;
+            if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) heading = event.webkitCompassHeading;
+            else if (event.alpha !== null) heading = (360 - event.alpha) % 360;
+            if (heading !== null && !isNaN(heading)) targetHeading = ((heading % 360) + 360) % 360;
+        }
 
-        function handleOrientation(event) {
-            let heading = null;
-            if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) heading = event.webkitCompassHeading;
-            else if (event.alpha !== null) heading = (360 - event.alpha) % 360;
-            if (heading !== null && !isNaN(heading)) targetHeading = ((heading % 360) + 360) % 360;
-        }
+        function startSensors() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(
+                    position => {
+                        currentLat = position.coords.latitude; currentLng = position.coords.longitude; statusText.innerText = 'GPS受信中';
+                        if (isTracking) map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+                        updateNavigationRoute();
+                    },
+                    error => { statusText.innerText = 'GPSエラー: ' + error.message; }, { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            }
+            if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            else window.addEventListener('deviceorientation', handleOrientation, true);
+            updateRotation();
+        }
 
-        function startSensors() {
-            if (navigator.geolocation) {
-                navigator.geolocation.watchPosition(
-                    position => {
-                        currentLat = position.coords.latitude; currentLng = position.coords.longitude; statusText.innerText = 'GPS受信中';
-                        if (isTracking) map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
-                        updateNavigationRoute();
-                    },
-                    error => { statusText.innerText = 'GPSエラー: ' + error.message; }, { enableHighAccuracy: true, maximumAge: 0 }
-                );
-            }
-            if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            else window.addEventListener('deviceorientation', handleOrientation, true);
-            updateRotation();
-        }
+        function updateRotation() {
+            let diff = targetHeading - currentHeading;
+            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+            currentHeading += diff * 0.15; currentHeading = ((currentHeading % 360) + 360) % 360;
+            mapContainer.style.transform = `rotate(-${currentHeading}deg)`;
+            requestAnimationFrame(updateRotation);
+        }
 
-        function updateRotation() {
-            let diff = targetHeading - currentHeading;
-            if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-            currentHeading += diff * 0.15; currentHeading = ((currentHeading % 360) + 360) % 360;
-            mapContainer.style.transform = `rotate(-${currentHeading}deg)`;
-            requestAnimationFrame(updateRotation);
-        }
+        resumeBtn.addEventListener('click', () => {
+            isTracking = true; resumeBtn.style.display = 'none';
+            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
+        });
 
-        resumeBtn.addEventListener('click', () => {
-            isTracking = true; resumeBtn.style.display = 'none';
-            map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
-        });
-
-        downloadMapBtn.addEventListener('click', async () => {
-            if (!navigator.onLine) return alert('オフライン中はダウンロードできません。');
-            const center = map.getCenter(); const cLat = center.lat; const cLng = center.lng;
-            const zoomConfigs = [ { z: 13, radius: 1 }, { z: 14, radius: 1 }, { z: 15, radius: 2 }, { z: 16, radius: 4 } ];
-            const urls = [];
-            for (const cfg of zoomConfigs) {
-                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z)); const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
-                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) { for (let dy = -cfg.radius; dy <= cfg.radius; dy++) { urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`); } }
-            }
-            downloadMapBtn.disabled = true; downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
-            const cache = await caches.open('hinanjo-navi-tiles-v3'); let saved = 0;
-            for (let i = 0; i < urls.length; i++) {
-                const url = urls[i]; downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
-                try { const existing = await cache.match(url); if (!existing) { const res = await fetch(url); if (res.ok) { await cache.put(url, res); saved++; } await new Promise(r => setTimeout(r, 50)); } else saved++; } catch (e) {}
-            }
-            downloadMapBtn.innerText = `保存完了！(${saved}枚)`; downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
-            setTimeout(() => { downloadMapBtn.innerText = '周辺地図を保存（圏外用）'; downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600'); downloadMapBtn.disabled = false; }, 4000);
-        });
-    </script>
+        downloadMapBtn.addEventListener('click', async () => {
+            if (!navigator.onLine) return alert('オフライン中はダウンロードできません。');
+            const center = map.getCenter(); const cLat = center.lat; const cLng = center.lng;
+            const zoomConfigs = [ { z: 13, radius: 1 }, { z: 14, radius: 1 }, { z: 15, radius: 2 }, { z: 16, radius: 4 } ];
+            const urls = [];
+            for (const cfg of zoomConfigs) {
+                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z)); const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
+                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) { for (let dy = -cfg.radius; dy <= cfg.radius; dy++) { urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`); } }
+            }
+            downloadMapBtn.disabled = true; downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
+            const cache = await caches.open('hinanjo-navi-tiles-v3'); let saved = 0;
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i]; downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
+                try { const existing = await cache.match(url); if (!existing) { const res = await fetch(url); if (res.ok) { await cache.put(url, res); saved++; } await new Promise(r => setTimeout(r, 50)); } else saved++; } catch (e) {}
+            }
+            downloadMapBtn.innerText = `保存完了！(${saved}枚)`; downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
+            setTimeout(() => { downloadMapBtn.innerText = '周辺地図を保存（圏外用）'; downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600'); downloadMapBtn.disabled = false; }, 4000);
+        });
+    </script>
 </body>
 </html>
