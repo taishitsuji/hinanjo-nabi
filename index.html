@@ -26,28 +26,30 @@
         .manual-category { background-color: #334155; padding: 12px 16px; font-weight: bold; color: #eab308; border-radius: 8px; margin-bottom: 16px; margin-top: 24px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .manual-item { background-color: #1f2937; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #64748b; }
 
-        /* 地図の巨大化と回転設定を解除し、通常サイズに戻す */
-        #map-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #map-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         #map { width: 100%; height: 100%; background: #1e293b; }
 
-        #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 50; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; }
-        #center-marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 40; width: 40px; height: 40px; pointer-events: none; }
-        #resume-btn { position: absolute; bottom: 70px; right: 16px; z-index: 60; display: none; }
+        /* UI要素の z-index を 1000以上に引き上げて地図より手前に表示する */
+        #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 1050; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; pointer-events: none; }
+        #ui-overlay > * { pointer-events: auto; }
         
-        #search-box { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 65; }
+        #center-marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1040; width: 40px; height: 40px; pointer-events: none; }
+        #resume-btn { position: absolute; bottom: 70px; right: 16px; z-index: 1060; display: none; }
+        
+        #search-box { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 1065; }
         #search-results { max-height: 300px; overflow-y: auto; touch-action: pan-y; }
 
-        #nav-panel { position: absolute; top: 72px; left: 16px; right: 16px; z-index: 55; background: rgba(15, 23, 42, 0.94); border: 2px solid #eab308; border-radius: 12px; padding: 12px 16px; display: none; }
+        #nav-panel { position: absolute; top: 72px; left: 16px; right: 16px; z-index: 1055; background: rgba(15, 23, 42, 0.94); border: 2px solid #eab308; border-radius: 12px; padding: 12px 16px; display: none; }
         
-        #hazard-btn { position: absolute; top: 75px; right: 16px; z-index: 60; background: rgba(15, 23, 42, 0.8); border: 2px solid #ef4444; color: white; font-weight: bold; font-size: 12px; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #hazard-btn { position: absolute; top: 75px; right: 16px; z-index: 1060; background: rgba(15, 23, 42, 0.8); border: 2px solid #ef4444; color: white; font-weight: bold; font-size: 12px; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         #hazard-btn.active { background: #ef4444; color: white; }
 
-        #hazard-legend { position: absolute; bottom: 85px; left: 16px; z-index: 60; background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; padding: 10px; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none; }
+        #hazard-legend { position: absolute; bottom: 85px; left: 16px; z-index: 1060; background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; padding: 10px; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none; }
         .legend-color { width: 14px; height: 14px; display: inline-block; border-radius: 2px; margin-right: 6px; }
 
         .toilet-pin { background-color: #10b981; border: 2px solid white; border-radius: 50%; color: white; font-weight: bold; font-size: 11px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 
-        #bottom-tab-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 65px; background-color: #0f172a; border-top: 1px solid #334155; display: flex; z-index: 100; }
+        #bottom-tab-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 65px; background-color: #0f172a; border-top: 1px solid #334155; display: flex; z-index: 1100; }
         .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 11px; font-weight: bold; padding: 5px; }
         .tab-btn.active { color: #eab308; }
         .tab-icon { font-size: 20px; margin-bottom: 2px; }
@@ -55,7 +57,7 @@
 </head>
 <body class="text-white font-sans selection:bg-yellow-500 selection:text-black">
 
-    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[200] p-6 text-center">
+    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-[2000] p-6 text-center">
         <h1 class="text-3xl font-bold mb-2 text-yellow-400">避難所マップナビ</h1>
         <p class="text-gray-400 text-sm mb-8">自分が向いている方向にピンが回転します。</p>
         <button id="start-btn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-10 rounded-full text-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] active:scale-95 transition">ナビゲーション開始</button>
@@ -152,7 +154,7 @@
         const startBtn = document.getElementById('start-btn'), startScreen = document.getElementById('start-screen');
         const resumeBtn = document.getElementById('resume-btn'), statusText = document.getElementById('status-text');
         const shelterCount = document.getElementById('shelter-count'), mapContainer = document.getElementById('map-container');
-        const centerMarker = document.getElementById('center-marker'); // ピンの要素を追加
+        const centerMarker = document.getElementById('center-marker');
         const navPanel = document.getElementById('nav-panel'), routeModeLabel = document.getElementById('route-mode-label');
         const targetNameEl = document.getElementById('target-name'), targetDistEl = document.getElementById('target-dist');
         const cancelNavBtn = document.getElementById('cancel-nav-btn'), searchBox = document.getElementById('search-box');
@@ -180,7 +182,7 @@
             hazardLayer = L.tileLayer('https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png', { opacity: 0.7, maxNativeZoom: 15, maxZoom: 17 });
 
             shelterCount.innerText = 'データ読込中...';
-            fetch('./shelters.json').then(res => res.json()).then(data => { allShelters = data; renderAllShelters(); });
+            fetch('./shelters.json').then(res => res.json()).then(data => { allShelters = data; renderAllShelters(); }).catch(e => { shelterCount.innerText = 'データ読込失敗'; });
             map.on('dragstart', () => { isTracking = false; resumeBtn.style.display = 'block'; });
         }
 
@@ -350,7 +352,6 @@
             if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
             currentHeading += diff * 0.15; currentHeading = ((currentHeading % 360) + 360) % 360;
             
-            // 地図ではなく、自分のピン（中心マーカー）を回転させる
             centerMarker.style.transform = `translate(-50%, -50%) rotate(${currentHeading}deg)`;
             
             requestAnimationFrame(updateRotation);
