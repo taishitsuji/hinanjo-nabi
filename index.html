@@ -29,7 +29,6 @@
         #map-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         #map { width: 100%; height: 100%; background: #1e293b; }
 
-        /* UI要素の z-index を 1000以上に引き上げて地図より手前に表示する */
         #ui-overlay { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 1050; background: linear-gradient(to top, rgba(15,23,42,1) 75%, rgba(15,23,42,0)); padding: 20px 16px 16px 16px; pointer-events: none; }
         #ui-overlay > * { pointer-events: auto; }
         
@@ -190,7 +189,7 @@
             if (map.hasLayer(hazardLayer)) {
                 map.removeLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オフ)'; hazardBtn.classList.remove('active'); hazardLegend.style.display = 'none';
             } else {
-                if (!navigator.onLine) return alert('ハザードマップの表示にはインターネット接続が必要です。');
+                // オフライン制限を解除（キャッシュから読み込ませる）
                 map.addLayer(hazardLayer); hazardBtn.innerText = '⚠️ 浸水ハザード (オン)'; hazardBtn.classList.add('active'); hazardLegend.style.display = 'block';
             }
         });
@@ -362,20 +361,40 @@
             map.invalidateSize({ animate: false }); map.setView([currentLat, currentLng], map.getZoom(), { animate: false });
         });
 
+        // 保存機能にハザードマップ（浸水深）のURLも追加
         downloadMapBtn.addEventListener('click', async () => {
             if (!navigator.onLine) return alert('オフライン中はダウンロードできません。');
             const center = map.getCenter(); const cLat = center.lat; const cLng = center.lng;
             const zoomConfigs = [ { z: 13, radius: 1 }, { z: 14, radius: 1 }, { z: 15, radius: 2 }, { z: 16, radius: 4 } ];
             const urls = [];
+            
             for (const cfg of zoomConfigs) {
-                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z)); const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
-                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) { for (let dy = -cfg.radius; dy <= cfg.radius; dy++) { urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`); } }
+                const cx = Math.floor((cLng + 180) / 360 * Math.pow(2, cfg.z)); 
+                const cy = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, cfg.z));
+                for (let dx = -cfg.radius; dx <= cfg.radius; dx++) { 
+                    for (let dy = -cfg.radius; dy <= cfg.radius; dy++) { 
+                        // 通常のベース地図
+                        urls.push(`https://tile.openstreetmap.org/${cfg.z}/${cx + dx}/${cy + dy}.png`); 
+                        // ハザードマップ（ズームレベル15まで）
+                        if (cfg.z <= 15) {
+                            urls.push(`https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/${cfg.z}/${cx + dx}/${cy + dy}.png`);
+                        }
+                    } 
+                }
             }
+            
             downloadMapBtn.disabled = true; downloadMapBtn.classList.replace('bg-emerald-600', 'bg-gray-600');
             const cache = await caches.open('hinanjo-navi-tiles-v3'); let saved = 0;
             for (let i = 0; i < urls.length; i++) {
                 const url = urls[i]; downloadMapBtn.innerText = `保存中... (${i + 1}/${urls.length})`;
-                try { const existing = await cache.match(url); if (!existing) { const res = await fetch(url); if (res.ok) { await cache.put(url, res); saved++; } await new Promise(r => setTimeout(r, 50)); } else saved++; } catch (e) {}
+                try { 
+                    const existing = await cache.match(url); 
+                    if (!existing) { 
+                        const res = await fetch(url); 
+                        if (res.ok) { await cache.put(url, res); saved++; } 
+                        await new Promise(r => setTimeout(r, 50)); 
+                    } else { saved++; } 
+                } catch (e) {}
             }
             downloadMapBtn.innerText = `保存完了！(${saved}枚)`; downloadMapBtn.classList.replace('bg-gray-600', 'bg-blue-600');
             setTimeout(() => { downloadMapBtn.innerText = '周辺地図を保存（圏外用）'; downloadMapBtn.classList.replace('bg-blue-600', 'bg-emerald-600'); downloadMapBtn.disabled = false; }, 4000);
